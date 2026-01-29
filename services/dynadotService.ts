@@ -1,94 +1,123 @@
-// DYNADOT API INTEGRATION SERVICE
-// Now uses the secure Backend Proxy at /api/dynadot
+import { Domain } from '../types';
 
 const PROXY_BASE = '/api/dynadot';
 
+// Helper: Parse XML Response from Dynadot
+const parseXml = (xmlStr: string) => {
+  const parser = new DOMParser();
+  return parser.parseFromString(xmlStr, "text/xml");
+};
+
 // Helper to call the proxy
-const callProxy = async (commandParams: string): Promise<{ success: boolean, data: string }> => {
+const callProxy = async (commandParams: string): Promise<{ success: boolean, data: Document, raw: string }> => {
   try {
-    // Example: /api/dynadot/command=CheckDomain&domain=test.com
-    const res = await fetch(`${PROXY_BASE}/${commandParams}`);
+    const res = await fetch(`${PROXY_BASE}?${commandParams}`);
+    const text = await res.text();
     
-    // Fallback for Demo Environment (Static Server) where API route is 404
+    // Check for proxy/network errors
     if (!res.ok) {
-        if (res.status === 404) {
-             console.warn(`[Mock Mode] Backend Proxy not found. Simulating success for: ${commandParams}`);
-             return { success: true, data: '<ResponseCode>0</ResponseCode><Display>Mock Success</Display>' };
-        }
-        throw new Error(`Proxy error: ${res.statusText}`);
+        throw new Error(`API Error: ${res.statusText}`);
     }
 
-    const text = await res.text();
-    return { success: true, data: text };
+    const xmlDoc = parseXml(text);
+    const responseCode = xmlDoc.getElementsByTagName("ResponseCode")[0]?.textContent;
+    
+    // Dynadot ResponseCode 0 means success
+    const success = responseCode === "0";
+    
+    return { success, data: xmlDoc, raw: text };
   } catch (error) {
-    console.error("Dynadot Service Error:", error);
-    // Return mock success to prevent app crash in demo
-    return { success: true, data: '<ResponseCode>0</ResponseCode><Display>Fallback Success</Display>' };
+    console.error("Dynadot API Error:", error);
+    throw error;
   }
 };
 
-const isSuccess = (xml: string) => xml.includes('<ResponseCode>0</ResponseCode>');
-
 export const dynadot = {
-  // 1. Check Availability
-  checkDomain: async (domain: string) => {
-    // Frontend calls proxy
-    console.log(`[Proxy Call] Checking: ${domain}...`);
-    const result = await callProxy(`command=CheckDomain&domain=${domain}`);
-    return isSuccess(result.data);
+  // 1. Search Logic (Real-time)
+  search: async (keyword: string): Promise<Domain[]> => {
+    // Command: search usually requires separate API access or use 'check' for specific domains.
+    // We will use 'search' command if available, or 'check' logic.
+    // Note: Dynadot 'search' command might differ based on API tier. We'll use 'search' here.
+    const result = await callProxy(`command=search&keyword=${keyword}&show_price=1`);
+    
+    if (!result.success) return [];
+
+    const results = result.data.getElementsByTagName("SearchResult");
+    const mappedDomains: Domain[] = [];
+
+    for (let i = 0; i < results.length; i++) {
+        const item = results[i];
+        const nameFull = item.getAttribute("DomainName") || "";
+        const status = item.getAttribute("Status") || "unknown"; // available, taken
+        const priceStr = item.getAttribute("Price") || "0";
+
+        if (nameFull && status === 'available') {
+            const parts = nameFull.split('.');
+            const tld = '.' + parts[parts.length - 1];
+            
+            mappedDomains.push({
+                id: `real_${nameFull}`,
+                name: parts.slice(0, -1).join('.'),
+                tld: tld as any,
+                fullName: nameFull,
+                price: parseFloat(priceStr),
+                currency: 'USDT', // Map Dynadot USD to USDT
+                isPremium: false,
+                owner: null,
+                isListed: true,
+                views: 0,
+                description: "Available for immediate registration.",
+                privacyEnabled: true,
+                autoRenew: true,
+                nameservers: [],
+                dnsRecords: []
+            });
+        }
+    }
+    return mappedDomains;
   },
 
-  // 2. Get Prices
-  getTldPrices: async (tld: string) => {
-    console.log(`[Proxy Call] Fetching prices for: ${tld}`);
-    await callProxy(`command=TldPrices&tld=${tld}`);
+  // 2. Check Single Domain (For Details Page)
+  checkDomain: async (domain: string): Promise<boolean> => {
+    const result = await callProxy(`command=check&domain0=${domain}`);
+    if (!result.success) return false;
+    
+    const item = result.data.getElementsByTagName("Domain")[0];
+    const status = item?.getAttribute("Available");
+    return status === "yes";
   },
 
   // 3. Register Domain (The Payment Step)
   registerDomain: async (domain: string, years: number) => {
-    console.log(`[Proxy Call] Registering ${domain} for ${years} years...`);
-    const result = await callProxy(`command=RegisterDomain&domain=${domain}&duration=${years}`);
+    // Note: Real registration requires account balance on Dynadot.
+    const result = await callProxy(`command=register&domain=${domain}&duration=${years}`);
     
-    // In a real app, parse XML to get actual ID. For now return random or parsed if available.
-    return { 
-        success: isSuccess(result.data), 
-        id: 'dyn_' + Math.random().toString(36).substr(2, 9) 
-    };
+    // Extract Order ID or Error
+    if (result.success) {
+        const regId = result.data.getElementsByTagName("RegistrationID")[0]?.textContent;
+        return { success: true, id: regId || 'pending' };
+    } else {
+        const err = result.data.getElementsByTagName("Error")[0]?.textContent;
+        return { success: false, error: err };
+    }
   },
 
-  // 4. Set Custom Nameservers (Mandatory Step)
+  // 4. Set Nameservers
   setNameservers: async (domain: string, ns1: string, ns2: string) => {
-    console.log(`[Proxy Call] Setting Nameservers: ${ns1}, ${ns2}`);
-    const result = await callProxy(`command=SetNameservers&domain=${domain}&ns1=${ns1}&ns2=${ns2}`);
-    return isSuccess(result.data);
+    const result = await callProxy(`command=set_ns&domain=${domain}&ns0=${ns1}&ns1=${ns2}`);
+    return result.success;
   },
 
-  // 5. Set Email Forwarding (Optional Step)
+  // 5. Set Email Forwarding
   setEmailForwarding: async (domain: string, fromUser: string, toEmail: string) => {
-    console.log(`[Proxy Call] Email Forwarding: ${fromUser}@${domain} -> ${toEmail}`);
-    // Note: command syntax may vary based on specific Dynadot API version for forwarding
-    const result = await callProxy(`command=SetEmailForwarding&domain=${domain}&email=${toEmail}`); 
-    return isSuccess(result.data);
+     // This is specific to Dynadot forwarding logic
+    const result = await callProxy(`command=set_email_forward&domain=${domain}&from=${fromUser}&to=${toEmail}`); 
+    return result.success;
   },
 
-  // 6. Set Whois Privacy (Auto Step)
+  // 6. Set Whois Privacy
   setPrivacy: async (domain: string) => {
-    console.log(`[Proxy Call] Enabling Privacy`);
-    const result = await callProxy(`command=SetPrivacy&domain=${domain}&state=on`);
-    return isSuccess(result.data);
-  },
-
-  // 7. Get Domain List (Dashboard)
-  getDomainList: async () => {
-    console.log(`[Proxy Call] Fetching Domain List`);
-    const result = await callProxy(`command=GetDomainList`);
-    return result.data;
-  },
-
-  // 8. Renewal
-  renewDomain: async (domain: string, years: number) => {
-    console.log(`[Proxy Call] Renewing ${domain}`);
-    const result = await callProxy(`command=RenewDomain&domain=${domain}&duration=${years}`);
-    return isSuccess(result.data);
+    const result = await callProxy(`command=set_privacy&domain=${domain}&state=on`);
+    return result.success;
   }
 };
