@@ -1,6 +1,7 @@
 {
   "rewrites": [
     { "source": "/api/dynadot", "destination": "/api/dynadot.js" },
+    { "source": "/api/confirm", "destination": "/api/confirm.js" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
