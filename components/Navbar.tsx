@@ -11,10 +11,10 @@ export const Navbar: React.FC = () => {
   const location = useLocation();
   const [scrolled, setScrolled] = useState(false);
   const { showNotification } = useNotification();
-  const [isMobile, setIsMobile] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Check if user was previously connected
+    // Check if user was previously connected in local storage
     const savedUser = mockBackend.getCurrentUser();
     if (savedUser) {
         setUser(savedUser);
@@ -23,64 +23,45 @@ export const Navbar: React.FC = () => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener('scroll', handleScroll);
     
-    // Simple mobile detection
-    setIsMobile(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
-
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
   const handleAuth = async () => {
+    if (loading) return;
+
     if (user) {
-      // Disconnect
-      await web3Service.disconnect();
-      mockBackend.disconnect();
-      setUser(null);
-      showNotification("Wallet disconnected", "info");
+      // Disconnect Logic
+      setLoading(true);
+      try {
+          await web3Service.disconnect();
+          mockBackend.disconnect();
+          setUser(null);
+          showNotification("Wallet disconnected", "info");
+      } catch (e) {
+          console.error(e);
+      } finally {
+          setLoading(false);
+      }
     } else {
       // Connect Logic
+      setLoading(true);
       try {
-          if (isMobile) {
-            // STRATEGY 1: Direct Deep Link (As requested by user)
-            // This forces the MetaMask/Trust app to open and load the DApp
-            const dappUrl = "domaine-crypto.vercel.app"; // Your domain
-            const deepLink = `https://metamask.app.link/dapp/${dappUrl}`;
-            
-            // Try to open standard WalletConnect modal first (better UX if it works)
-            // If the user is IN the browser of the wallet, web3Service works.
-            // If the user is in Chrome on Android, deepLink is needed.
-            if ((window as any).ethereum) {
-                 const realUser = await web3Service.connectWallet();
-                 finishLogin(realUser);
-            } else {
-                 // Force open App
-                 window.open(deepLink, '_blank');
-                 // Also try standard connect in background in case they come back
-                 const realUser = await web3Service.connectWallet();
-                 finishLogin(realUser);
-            }
-          } else {
-            // Desktop: Open QR Code Modal
-            const realUser = await web3Service.connectWallet();
-            finishLogin(realUser);
-          }
+          const realUser = await web3Service.connectWallet();
+          
+          // Save session
+          localStorage.setItem('cryptoreg_user_v3', JSON.stringify(realUser));
+          setUser(realUser);
+          showNotification(`Connected: ${realUser.walletAddress.substring(0,6)}...`, "success");
       } catch (error: any) {
-          console.error(error);
-          // If automatic fail, try generic fallback
-          if (!user && isMobile) {
-              window.open(`https://metamask.app.link/dapp/domaine-crypto.vercel.app/`, '_blank');
-          } else {
+          console.error("Auth Error:", error);
+          if (!error.message?.includes("cancelled")) {
               showNotification(error.message || "Connection failed", "error");
           }
+      } finally {
+          setLoading(false);
       }
     }
   };
-
-  const finishLogin = (realUser: User) => {
-      // Save to LocalStorage
-      localStorage.setItem('cryptoreg_user_v3', JSON.stringify(realUser));
-      setUser(realUser);
-      showNotification(`Connected: ${realUser.walletAddress.substring(0,6)}...`, "success");
-  }
 
   return (
     <nav className={`fixed w-full z-50 transition-all duration-300 ${scrolled ? 'bg-darker/90 backdrop-blur-lg border-b border-border shadow-xl' : 'bg-transparent'}`}>
@@ -106,20 +87,26 @@ export const Navbar: React.FC = () => {
             <GasTracker />
             <button
               onClick={handleAuth}
+              disabled={loading}
               className={`flex items-center gap-3 px-5 py-2.5 rounded-full font-medium transition-all ${
                 user 
                 ? 'bg-surface border border-border hover:border-primary text-gray-300' 
                 : 'bg-primary hover:bg-primaryHover text-white shadow-[0_0_20px_rgba(16,185,129,0.3)]'
-              }`}
+              } ${loading ? 'opacity-80 cursor-wait' : ''}`}
             >
-              <i className={`fas ${user ? 'fa-user-circle' : 'fa-wallet'}`}></i>
+              {loading ? (
+                  <i className="fas fa-spinner fa-spin"></i>
+              ) : (
+                  <i className={`fas ${user ? 'fa-user-circle' : 'fa-wallet'}`}></i>
+              )}
+              
               {user ? (
                 <span className="text-sm">
                   {user.walletAddress.substring(0,6)}... <span className="text-primary ml-1">({user.balance.BNB} BNB)</span>
                 </span>
               ) : (
                 <span className="flex items-center gap-2">
-                    {isMobile ? "Open Wallet App" : "Connect Wallet"}
+                    Connect Wallet
                 </span>
               )}
             </button>
