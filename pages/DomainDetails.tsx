@@ -80,7 +80,7 @@ export const DomainDetails: React.FC = () => {
             throw new Error(payment?.error || "Payment Failed");
         }
 
-        setTxHash(payment.hash);
+        setTxHash(payment.hash || '');
         showNotification("Payment Sent! Waiting for confirmation...", "info");
         
         // Wait for blockchain confirmation
@@ -108,7 +108,7 @@ export const DomainDetails: React.FC = () => {
             currency: domain.currency,
             years: years,
             nameservers: [ns1, ns2],
-            tx_hash: payment.hash,
+            tx_hash: payment.hash || '',
             forwarding_email: targetEmail,
             created_at: new Date().toISOString()
         };
