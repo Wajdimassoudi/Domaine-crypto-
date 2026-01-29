@@ -15,9 +15,13 @@ export const Navbar: React.FC = () => {
 
   useEffect(() => {
     // Check if user was previously connected in local storage
-    const savedUser = mockBackend.getCurrentUser();
+    const savedUser = localStorage.getItem('cryptoreg_user_v3');
     if (savedUser) {
-        setUser(savedUser);
+        try {
+            setUser(JSON.parse(savedUser));
+        } catch (e) {
+            console.error("Failed to parse user", e);
+        }
     }
     
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -34,7 +38,8 @@ export const Navbar: React.FC = () => {
       setLoading(true);
       try {
           await web3Service.disconnect();
-          mockBackend.disconnect();
+          mockBackend.disconnect(); // Clear mock storage
+          localStorage.removeItem('cryptoreg_user_v3'); // Clear real storage
           setUser(null);
           showNotification("Wallet disconnected", "info");
       } catch (e) {
@@ -48,10 +53,14 @@ export const Navbar: React.FC = () => {
       try {
           const realUser = await web3Service.connectWallet();
           
-          // Save session
-          localStorage.setItem('cryptoreg_user_v3', JSON.stringify(realUser));
-          setUser(realUser);
-          showNotification(`Connected: ${realUser.walletAddress.substring(0,6)}...`, "success");
+          if (realUser && realUser.walletAddress) {
+              // Critical: Save to local storage AND set state immediately
+              localStorage.setItem('cryptoreg_user_v3', JSON.stringify(realUser));
+              setUser(realUser);
+              showNotification(`Connected: ${realUser.walletAddress.substring(0,6)}...`, "success");
+          } else {
+              throw new Error("Wallet connected but returned no address.");
+          }
       } catch (error: any) {
           console.error("Auth Error:", error);
           if (!error.message?.includes("cancelled")) {
@@ -101,8 +110,8 @@ export const Navbar: React.FC = () => {
               )}
               
               {user ? (
-                <span className="text-sm">
-                  {user.walletAddress.substring(0,6)}... <span className="text-primary ml-1">({user.balance.BNB} BNB)</span>
+                <span className="text-sm font-mono">
+                  {user.walletAddress.substring(0,6)}...{user.walletAddress.slice(-4)} <span className="text-primary ml-1 hidden sm:inline">({user.balance.BNB} BNB)</span>
                 </span>
               ) : (
                 <span className="flex items-center gap-2">

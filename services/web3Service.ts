@@ -17,15 +17,14 @@ const ERC20_ABI = [
   "function balanceOf(address owner) view returns (uint256)"
 ];
 
-// Network Config: BSC Mainnet (Standard EIP-155 / Reown Structure)
-// Fixes TS Error: Type is not assignable to AppKitNetwork
+// Network Config: BSC Mainnet (Fixed for strict Typescript & AppKit types)
 const bscMainnet = {
-  id: 56,
+  id: 56, // Must be 'id', not 'chainId'
   name: 'Binance Smart Chain',
   network: 'bsc',
   nativeCurrency: {
     decimals: 18,
-    name: 'BNB',
+    name: 'Binance Coin',
     symbol: 'BNB',
   },
   rpcUrls: {
@@ -50,7 +49,7 @@ let appKitError: string | null = null;
 
 if (typeof window !== 'undefined') {
     try {
-        // @ts-ignore - Ignore strict type checking for the config object to prevent build failures on minor mismatches
+        // @ts-ignore
         appKit = createAppKit({
           adapters: [new EthersAdapter()],
           networks: [bscMainnet],
@@ -66,7 +65,7 @@ if (typeof window !== 'undefined') {
           themeMode: 'dark',
           themeVariables: {
             '--w3m-accent': '#10b981',
-            '--w3m-z-index': 9999 // Fixed: Changed string '9999' to number 9999
+            '--w3m-z-index': 9999 // Fixed: Number not string
           }
         });
         console.log("AppKit initialized successfully");
@@ -117,7 +116,6 @@ export const web3Service = {
             const walletProvider = await waitForConnection();
             provider = new BrowserProvider(walletProvider);
         } else {
-             // AppKit failed to init
              console.warn("AppKit not available:", appKitError);
              throw new Error("AppKit not initialized");
         }
@@ -128,14 +126,12 @@ export const web3Service = {
         if ((window as any).ethereum) {
             try {
                 provider = new BrowserProvider((window as any).ethereum);
-                // Request accounts directly
                 await provider.send("eth_requestAccounts", []);
             } catch (mmError: any) {
                  if (mmError.code === 4001) throw new Error("User rejected connection");
                  throw new Error("Failed to connect to wallet.");
             }
         } else {
-            // Detailed Error Reporting
             if (appKitError) {
                 throw new Error(`Connection System Error: ${appKitError}. Also, no MetaMask found.`);
             }
@@ -150,34 +146,32 @@ export const web3Service = {
 
     // 4. Force Network Check/Switch to BSC
     const network = await provider.getNetwork();
+    // 56n is BigInt for BSC Chain ID
     if (network.chainId !== 56n) {
             try {
-                // Try switching via Wallet RPC
                 await provider.send("wallet_switchEthereumChain", [{ chainId: "0x38" }]); // 56 in hex
             } catch (switchError: any) {
-                // This error code indicates that the chain has not been added to MetaMask.
-            if (switchError.code === 4902) {
-                try {
-                    await provider.send("wallet_addEthereumChain", [{
-                        chainId: "0x38",
-                        chainName: "Binance Smart Chain",
-                        rpcUrls: ["https://bsc-dataseed.binance.org/"],
-                        nativeCurrency: {
-                            name: "Binance Coin",
-                            symbol: "BNB",
-                            decimals: 18
-                        },
-                        blockExplorerUrls: ["https://bscscan.com/"]
-                    }]);
-                } catch (addError) {
-                    console.error("Failed to add BSC network", addError);
+                if (switchError.code === 4902) {
+                    try {
+                        await provider.send("wallet_addEthereumChain", [{
+                            chainId: "0x38",
+                            chainName: "Binance Smart Chain",
+                            rpcUrls: ["https://bsc-dataseed.binance.org/"],
+                            nativeCurrency: {
+                                name: "Binance Coin",
+                                symbol: "BNB",
+                                decimals: 18
+                            },
+                            blockExplorerUrls: ["https://bscscan.com/"]
+                        }]);
+                    } catch (addError) {
+                        console.error("Failed to add BSC network", addError);
+                    }
                 }
-            }
-            console.warn("Network switch requested:", switchError);
             }
     }
 
-    // 5. Get Balances (Graceful degradation if RPC fails)
+    // 5. Get Balances
     let balanceBnB = 0;
     let balanceUSDT = 0;
     
@@ -185,19 +179,16 @@ export const web3Service = {
         const balanceBigInt = await provider.getBalance(address);
         balanceBnB = parseFloat(formatEther(balanceBigInt));
         
-        // Try USDT Balance
         const usdtContract = new Contract(USDT_CONTRACT_ADDRESS, ERC20_ABI, provider);
         try {
             const usdtBal = await usdtContract.balanceOf(address);
             balanceUSDT = parseFloat(formatUnits(usdtBal, 18));
-        } catch (err) {
-            // Ignore
-        }
+        } catch (err) { /* ignore */ }
     } catch (e) {
         console.warn("Could not fetch balances", e);
     }
 
-    return {
+    const userData: User = {
         id: address.toLowerCase(),
         username: 'Wallet User',
         walletAddress: address,
@@ -207,6 +198,9 @@ export const web3Service = {
             USDT: parseFloat(balanceUSDT.toFixed(2))
         }
     };
+    
+    // Explicitly return the user data
+    return userData;
   },
 
   disconnect: async () => {
@@ -218,7 +212,6 @@ export const web3Service = {
   },
 
   sendPayment: async (amount: number, currency: string): Promise<{ success: boolean; hash?: string; wait?: any; error?: string }> => {
-    // Re-instantiate provider to ensure we have the latest signer state
     let provider: BrowserProvider | null = null;
     
     if (appKit && appKit.getIsConnectedState()) {
@@ -233,7 +226,6 @@ export const web3Service = {
 
     const signer = await provider.getSigner();
     
-    // Ensure on BSC
     const network = await provider.getNetwork();
     if (network.chainId !== 56n) {
          throw new Error("Wrong Network. Please switch to Binance Smart Chain (BSC).");
@@ -248,7 +240,6 @@ export const web3Service = {
             });
         } 
         else {
-            // USDT/BUSD Logic
             const contract = new Contract(USDT_CONTRACT_ADDRESS, ERC20_ABI, signer);
             const amountInWei = parseUnits(amount.toString(), 18);
             tx = await contract.transfer(ADMIN_WALLET, amountInWei);
