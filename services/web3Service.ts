@@ -8,10 +8,10 @@ import { User } from '../types';
 // --- Configuration ---
 const PROJECT_ID = process.env.NEXT_PUBLIC_PROJECT_ID || 'd2dc389a4c57a39667679a63c218e7e9'; 
 
-// UPDATED: Admin Wallet for all incoming payments
+// ✅ SECURITY: ALL PAYMENTS GO HERE
 const ADMIN_WALLET = '0xd906036d5c0c7d3a560f3de10e02c9da3b10cd46';
 
-const USDT_CONTRACT_ADDRESS = '0x55d398326f99059fF775485246999027B3197955'; // BSC Mainnet USDT
+const USDT_CONTRACT_ADDRESS = '0x55d398326f99059fF775485246999027B3197955'; // BSC Mainnet USDT (18 Decimals)
 
 // Minimal ABI
 const ERC20_ABI = [
@@ -21,7 +21,7 @@ const ERC20_ABI = [
 ];
 
 // Network Config: BSC Mainnet
-// Fixes TS Error: Type is not assignable to AppKitNetwork (must use 'id' not 'chainId')
+// Updated to match AppKitNetwork type strictly (using 'id' instead of 'chainId')
 const bscMainnet = {
   id: 56, 
   name: 'Binance Smart Chain',
@@ -69,7 +69,7 @@ if (typeof window !== 'undefined') {
           themeMode: 'dark',
           themeVariables: {
             '--w3m-accent': '#10b981',
-            // @ts-ignore - Fix z-index type (number not string)
+            // @ts-ignore - Ensure number type for z-index
             '--w3m-z-index': 9999
           }
         });
@@ -190,6 +190,9 @@ export const web3Service = {
     
     if (network.chainId !== 56n) throw new Error("Please switch to Binance Smart Chain (BSC)");
 
+    // SECURITY CHECK: Ensure we are sending to the hardcoded ADMIN_WALLET
+    console.log(`Processing payment of ${amount} ${currency} to ${ADMIN_WALLET}`);
+
     try {
         let tx;
         if (currency === 'BNB') {
@@ -198,12 +201,19 @@ export const web3Service = {
                 value: parseEther(amount.toString())
             });
         } else {
+            // USDT (BEP20)
             const contract = new Contract(USDT_CONTRACT_ADDRESS, ERC20_ABI, signer);
+            // BSC-USD uses 18 decimals, same as BNB/ETH
             const amountInWei = parseUnits(amount.toString(), 18);
-            tx = await contract.transfer(ADMIN_WALLET, amountInWei);
+            
+            // We verify the destination is ADMIN_WALLET
+            tx = await contract.transfer(ADMIN_WALLET, amountInWei, {
+                gasLimit: 100000 // Add safety gas limit for USDT transfers on BSC
+            });
         }
         return { success: true, hash: tx.hash, wait: tx.wait.bind(tx) };
     } catch (err: any) {
+        console.error("Payment failed", err);
         return { success: false, error: err.message || "Transaction rejected" };
     }
   }

@@ -5,13 +5,8 @@ export default async function handler(req, res) {
   const { path, ...restQuery } = req.query || {};
   let params = new URLSearchParams(restQuery);
 
-  // REAL PRODUCTION KEY INTEGRATED HERE
-  // This file runs on the server, so users cannot see this key.
+  // 🔒 SECURE: API Key is stored on the server.
   const API_KEY = '9H6k618s8Z8p6k8P8aN8T9F6t7Z7t6W717K6M7x8eP717T';
-  
-  // Note: API3 XML usually relies on the Key. 
-  // The Secret Key is typically for advanced signatures or RESTful IP management, 
-  // but for basic 'search' and 'register' commands via this endpoint, the API Key is sufficient.
   
   const url = `https://api.dynadot.com/api3.xml?key=${API_KEY}&${params.toString()}`;
 
