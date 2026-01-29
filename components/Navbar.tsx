@@ -11,9 +11,10 @@ export const Navbar: React.FC = () => {
   const location = useLocation();
   const [scrolled, setScrolled] = useState(false);
   const { showNotification } = useNotification();
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
-    // Check if user was previously connected in localStorage
+    // Check if user was previously connected
     const savedUser = mockBackend.getCurrentUser();
     if (savedUser) {
         setUser(savedUser);
@@ -21,31 +22,65 @@ export const Navbar: React.FC = () => {
     
     const handleScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener('scroll', handleScroll);
+    
+    // Simple mobile detection
+    setIsMobile(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
+
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
   const handleAuth = async () => {
     if (user) {
       // Disconnect
+      await web3Service.disconnect();
       mockBackend.disconnect();
       setUser(null);
       showNotification("Wallet disconnected", "info");
     } else {
-      // Connect Real Wallet
+      // Connect Logic
       try {
-          const realUser = await web3Service.connectWallet();
-          
-          // Save to LocalStorage (via mockBackend helper or direct) so other pages see the user
-          // We use the same key mockBackend uses to keep consistency across the app
-          localStorage.setItem('cryptoreg_user_v3', JSON.stringify(realUser));
-          
-          setUser(realUser);
-          showNotification(`Connected: ${realUser.walletAddress.substring(0,6)}...`, "success");
+          if (isMobile) {
+            // STRATEGY 1: Direct Deep Link (As requested by user)
+            // This forces the MetaMask/Trust app to open and load the DApp
+            const dappUrl = "domaine-crypto.vercel.app"; // Your domain
+            const deepLink = `https://metamask.app.link/dapp/${dappUrl}`;
+            
+            // Try to open standard WalletConnect modal first (better UX if it works)
+            // If the user is IN the browser of the wallet, web3Service works.
+            // If the user is in Chrome on Android, deepLink is needed.
+            if ((window as any).ethereum) {
+                 const realUser = await web3Service.connectWallet();
+                 finishLogin(realUser);
+            } else {
+                 // Force open App
+                 window.open(deepLink, '_blank');
+                 // Also try standard connect in background in case they come back
+                 const realUser = await web3Service.connectWallet();
+                 finishLogin(realUser);
+            }
+          } else {
+            // Desktop: Open QR Code Modal
+            const realUser = await web3Service.connectWallet();
+            finishLogin(realUser);
+          }
       } catch (error: any) {
-          showNotification(error.message, "error");
+          console.error(error);
+          // If automatic fail, try generic fallback
+          if (!user && isMobile) {
+              window.open(`https://metamask.app.link/dapp/domaine-crypto.vercel.app/`, '_blank');
+          } else {
+              showNotification(error.message || "Connection failed", "error");
+          }
       }
     }
   };
+
+  const finishLogin = (realUser: User) => {
+      // Save to LocalStorage
+      localStorage.setItem('cryptoreg_user_v3', JSON.stringify(realUser));
+      setUser(realUser);
+      showNotification(`Connected: ${realUser.walletAddress.substring(0,6)}...`, "success");
+  }
 
   return (
     <nav className={`fixed w-full z-50 transition-all duration-300 ${scrolled ? 'bg-darker/90 backdrop-blur-lg border-b border-border shadow-xl' : 'bg-transparent'}`}>
@@ -83,7 +118,9 @@ export const Navbar: React.FC = () => {
                   {user.walletAddress.substring(0,6)}... <span className="text-primary ml-1">({user.balance.BNB} BNB)</span>
                 </span>
               ) : (
-                "Connect Wallet"
+                <span className="flex items-center gap-2">
+                    {isMobile ? "Open Wallet App" : "Connect Wallet"}
+                </span>
               )}
             </button>
           </div>
