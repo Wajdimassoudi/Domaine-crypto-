@@ -4,6 +4,7 @@ import { EthersAdapter } from '@reown/appkit-adapter-ethers';
 import { User } from '../types';
 
 // --- Configuration ---
+// IMPORTANT: Get a valid Project ID from https://cloud.reown.com if this one fails
 const PROJECT_ID = process.env.NEXT_PUBLIC_PROJECT_ID || 'd2dc389a4c57a39667679a63c218e7e9'; 
 const ADMIN_WALLET = process.env.NEXT_PUBLIC_RECEIVER_WALLET || '0x4B0E80c2B8d4239857946927976f00707328C6E6';
 const USDT_CONTRACT_ADDRESS = '0x55d398326f99059fF775485246999027B3197955'; // BSC Mainnet USDT
@@ -33,6 +34,7 @@ const metadata = {
 
 // --- AppKit Initialization ---
 let appKit: any = null;
+let appKitError: string | null = null;
 
 if (typeof window !== 'undefined') {
     try {
@@ -54,13 +56,15 @@ if (typeof window !== 'undefined') {
             '--w3m-z-index': '9999'
           }
         });
-    } catch (e) {
-        console.warn("AppKit failed to initialize, will use fallback.", e);
+        console.log("AppKit initialized successfully");
+    } catch (e: any) {
+        console.error("AppKit Initialization Failed:", e);
+        appKitError = e.message || "Unknown AppKit Error";
     }
 }
 
 // --- Helper: Wait for connection ---
-const waitForConnection = async (timeout = 40000): Promise<any> => {
+const waitForConnection = async (timeout = 60000): Promise<any> => {
     return new Promise((resolve, reject) => {
         const start = Date.now();
         
@@ -72,7 +76,7 @@ const waitForConnection = async (timeout = 40000): Promise<any> => {
         const interval = setInterval(() => {
             if (Date.now() - start > timeout) {
                 clearInterval(interval);
-                reject(new Error("Connection timed out"));
+                reject(new Error("Connection timed out. Please try again."));
             }
 
             if (appKit && appKit.getIsConnectedState()) {
@@ -95,20 +99,18 @@ export const web3Service = {
     try {
         // STRATEGY 1: Try AppKit (WalletConnect/Reown)
         if (appKit) {
-            try {
-                await appKit.open();
-                const walletProvider = await waitForConnection();
-                provider = new BrowserProvider(walletProvider);
-            } catch (appKitError) {
-                console.warn("AppKit connection failed or timed out, trying fallback...", appKitError);
-                throw new Error("Fallback needed"); // Trigger catch block to try fallback
-            }
+            console.log("Opening AppKit modal...");
+            await appKit.open();
+            const walletProvider = await waitForConnection();
+            provider = new BrowserProvider(walletProvider);
         } else {
+             // AppKit failed to init
+             console.warn("AppKit not available:", appKitError);
              throw new Error("AppKit not initialized");
         }
     } catch (error) {
         // STRATEGY 2: Fallback to window.ethereum (MetaMask/Injected)
-        console.log("Attempting direct window.ethereum connection...");
+        console.log("Falling back to direct window.ethereum connection...");
         
         if ((window as any).ethereum) {
             try {
@@ -120,7 +122,11 @@ export const web3Service = {
                  throw new Error("Failed to connect to wallet.");
             }
         } else {
-            throw new Error("No wallet found. Please install MetaMask or Trust Wallet.");
+            // Detailed Error Reporting
+            if (appKitError) {
+                throw new Error(`Connection System Error: ${appKitError}. Also, no MetaMask found.`);
+            }
+            throw new Error("No crypto wallet found. Please install MetaMask or TrustWallet extension.");
         }
     }
 
@@ -172,7 +178,7 @@ export const web3Service = {
             const usdtBal = await usdtContract.balanceOf(address);
             balanceUSDT = parseFloat(formatUnits(usdtBal, 18));
         } catch (err) {
-            // Ignore token fetch errors
+            console.warn("USDT balance fetch failed", err);
         }
     } catch (e) {
         console.warn("Could not fetch balances", e);
