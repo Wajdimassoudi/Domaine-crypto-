@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/api/dynadot/(.*)", "destination": "/api/dynadot.js" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
