@@ -14,12 +14,13 @@ export default defineConfig(({ mode }) => {
       },
     },
     define: {
-      // CRITICAL FIX: Redirect 'global' identifier to 'window.global'.
-      // In index.html, we define window.global = {}. 
-      // This traps any polyfills trying to write to global.fetch, preventing them from crashing the Window.
+      // FIX: Redirect 'global' to 'window.global' for browser compatibility with older libs
       'global': 'window.global',
       
-      // Explicitly inject env vars
+      // FIX: Ensure process.env is defined to avoid "process is not defined" errors in some libraries
+      'process.env': {},
+
+      // Explicitly inject specific env vars as replacement strings
       'process.env.NEXT_PUBLIC_PROJECT_ID': JSON.stringify(env.NEXT_PUBLIC_PROJECT_ID),
       'process.env.NEXT_PUBLIC_RECEIVER_WALLET': JSON.stringify(env.NEXT_PUBLIC_RECEIVER_WALLET),
       'process.env.NEXT_PUBLIC_SUPABASE_URL': JSON.stringify(env.NEXT_PUBLIC_SUPABASE_URL),
