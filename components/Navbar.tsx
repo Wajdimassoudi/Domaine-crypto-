@@ -1,29 +1,49 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { mockBackend } from '../services/mockBackend';
+import { web3Service } from '../services/web3Service';
 import { User } from '../types';
 import { GasTracker } from './GasTracker';
+import { useNotification } from '../context/NotificationContext';
 
 export const Navbar: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const location = useLocation();
   const [scrolled, setScrolled] = useState(false);
+  const { showNotification } = useNotification();
 
   useEffect(() => {
-    setUser(mockBackend.getCurrentUser());
+    // Check if user was previously connected in localStorage
+    const savedUser = mockBackend.getCurrentUser();
+    if (savedUser) {
+        setUser(savedUser);
+    }
     
     const handleScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const handleAuth = () => {
+  const handleAuth = async () => {
     if (user) {
+      // Disconnect
       mockBackend.disconnect();
       setUser(null);
+      showNotification("Wallet disconnected", "info");
     } else {
-      const u = mockBackend.connectWallet();
-      setUser(u);
+      // Connect Real Wallet
+      try {
+          const realUser = await web3Service.connectWallet();
+          
+          // Save to LocalStorage (via mockBackend helper or direct) so other pages see the user
+          // We use the same key mockBackend uses to keep consistency across the app
+          localStorage.setItem('cryptoreg_user_v3', JSON.stringify(realUser));
+          
+          setUser(realUser);
+          showNotification(`Connected: ${realUser.walletAddress.substring(0,6)}...`, "success");
+      } catch (error: any) {
+          showNotification(error.message, "error");
+      }
     }
   };
 
@@ -60,7 +80,7 @@ export const Navbar: React.FC = () => {
               <i className={`fas ${user ? 'fa-user-circle' : 'fa-wallet'}`}></i>
               {user ? (
                 <span className="text-sm">
-                  {user.username} <span className="text-gray-500 text-xs ml-1">({user.walletAddress.substring(0,6)}...)</span>
+                  {user.walletAddress.substring(0,6)}... <span className="text-primary ml-1">({user.balance.BNB} BNB)</span>
                 </span>
               ) : (
                 "Connect Wallet"

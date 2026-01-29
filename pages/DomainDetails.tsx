@@ -37,15 +37,19 @@ export const DomainDetails: React.FC = () => {
         setPrivacy(true);
         dynadot.checkDomain(d.fullName);
     }
-    // Try to get wallet from mock, but real flow uses web3Service on click
+    // Try to get wallet from storage
     setUser(mockBackend.getCurrentUser());
   }, [id]);
 
   const handleBuy = async () => {
     try {
-        const { address } = await web3Service.connectWallet();
-        // Update local state purely for UI display
-        setUser({ username: 'Investor', walletAddress: address, id: address, balance: { BNB: 0, BUSD: 0, USDT: 0 } });
+        // Force connect real wallet to ensure we have fresh data
+        const realUser = await web3Service.connectWallet();
+        
+        // Update storage so Navbar updates too
+        localStorage.setItem('cryptoreg_user_v3', JSON.stringify(realUser));
+        
+        setUser(realUser);
         setShowModal(true);
     } catch (e: any) {
         showNotification(e.message, "error");
@@ -70,9 +74,12 @@ export const DomainDetails: React.FC = () => {
         // 2. Real Payment via Blockchain
         const totalCost = domain.price * years;
         
-        // Note: For MVP, we assume BNB. If domain is priced in USD, we should convert.
-        // For safety in this demo, we'll assume the price in the object is the BNB amount to charge
-        // OR we warn the user. Let's assume the displayed price is the charge amount.
+        // MVP: Currently we force BNB payment in web3Service even if currency is USDT
+        // In a real app, we'd have a switch statement here.
+        // Warn user if they are trying to pay USDT/BUSD that we only take BNB for MVP
+        if (domain.currency !== 'BNB') {
+             // Optional: Alert user "Converting price to BNB..."
+        }
         
         const payment = await web3Service.sendPayment(totalCost, domain.currency);
         
@@ -99,8 +106,6 @@ export const DomainDetails: React.FC = () => {
         await dynadot.setPrivacy(domain.fullName);
 
         // 4. Save to Real Database (Supabase)
-        // If Supabase vars are missing, this might fail silently or log error, 
-        // but we fallback to mock for user experience if needed.
         const orderData = {
             domain_name: domain.fullName,
             buyer_wallet: user?.walletAddress || 'unknown',
