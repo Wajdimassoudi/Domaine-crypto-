@@ -1,4 +1,4 @@
-import { ethers } from 'ethers';
+import { BrowserProvider, Contract, formatEther, formatUnits, parseEther, parseUnits } from 'ethers';
 import { createAppKit } from '@reown/appkit';
 import { EthersAdapter } from '@reown/appkit-adapter-ethers';
 import { User } from '../types';
@@ -100,7 +100,7 @@ export const web3Service = {
         const walletProvider = await waitForConnection();
         
         // 3. Setup Ethers Provider
-        const provider = new ethers.BrowserProvider(walletProvider);
+        const provider = new BrowserProvider(walletProvider);
         const signer = await provider.getSigner();
         const address = await signer.getAddress();
 
@@ -121,12 +121,12 @@ export const web3Service = {
         
         try {
             const balanceBigInt = await provider.getBalance(address);
-            balanceBnB = parseFloat(ethers.formatEther(balanceBigInt));
+            balanceBnB = parseFloat(formatEther(balanceBigInt));
             
             // Try USDT Balance
-            const usdtContract = new ethers.Contract(USDT_CONTRACT_ADDRESS, ERC20_ABI, provider);
+            const usdtContract = new Contract(USDT_CONTRACT_ADDRESS, ERC20_ABI, provider);
             const usdtBal = await usdtContract.balanceOf(address);
-            balanceUSDT = parseFloat(ethers.formatUnits(usdtBal, 18));
+            balanceUSDT = parseFloat(formatUnits(usdtBal, 18));
         } catch (e) {
             console.warn("Could not fetch some balances", e);
         }
@@ -162,7 +162,7 @@ export const web3Service = {
     const walletProvider = appKit.getProvider();
     if (!walletProvider) throw new Error("Wallet not connected");
 
-    const provider = new ethers.BrowserProvider(walletProvider);
+    const provider = new BrowserProvider(walletProvider);
     const signer = await provider.getSigner();
     
     // Ensure on BSC
@@ -175,14 +175,14 @@ export const web3Service = {
         if (currency === 'BNB') {
             const tx = await signer.sendTransaction({
                 to: ADMIN_WALLET,
-                value: ethers.parseEther(amount.toString())
+                value: parseEther(amount.toString())
             });
             return { success: true, hash: tx.hash, wait: tx.wait.bind(tx) };
         } 
         else {
             // USDT/BUSD Logic
-            const contract = new ethers.Contract(USDT_CONTRACT_ADDRESS, ERC20_ABI, signer);
-            const amountInWei = ethers.parseUnits(amount.toString(), 18);
+            const contract = new Contract(USDT_CONTRACT_ADDRESS, ERC20_ABI, signer);
+            const amountInWei = parseUnits(amount.toString(), 18);
             const tx = await contract.transfer(ADMIN_WALLET, amountInWei);
             return { success: true, hash: tx.hash, wait: tx.wait.bind(tx) };
         }
