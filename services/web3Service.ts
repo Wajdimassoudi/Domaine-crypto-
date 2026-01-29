@@ -3,20 +3,34 @@ import { createAppKit } from '@reown/appkit';
 import { EthersAdapter } from '@reown/appkit-adapter-ethers';
 import { User } from '../types';
 
-// --- CONFIGURATION ---
-const PROJECT_ID = process.env.NEXT_PUBLIC_PROJECT_ID || 'd2dc389a4c57a39667679a63c218e7e9'; 
-const ADMIN_WALLET = process.env.NEXT_PUBLIC_RECEIVER_WALLET || '0x4B0E...ReplaceWithYourRealWallet...'; 
+// 1. Safe Environment Access for Vite
+const getEnv = (key: string) => {
+  // @ts-ignore
+  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
+      // @ts-ignore
+      return import.meta.env[key];
+  }
+  // @ts-ignore
+  if (typeof process !== 'undefined' && process.env && process.env[key]) {
+      // @ts-ignore
+      return process.env[key];
+  }
+  return '';
+};
 
-// USDT Contract Address on BSC Mainnet
-const USDT_CONTRACT_ADDRESS = '0x55d398326f99059fF775485246999027B3197955';
+// Configuration
+const PROJECT_ID = getEnv('NEXT_PUBLIC_PROJECT_ID') || 'd2dc389a4c57a39667679a63c218e7e9';
+const ADMIN_WALLET = getEnv('NEXT_PUBLIC_RECEIVER_WALLET') || '0x4B0E80c2B8d4239857946927976f00707328C6E6';
+const USDT_CONTRACT_ADDRESS = '0x55d398326f99059fF775485246999027B3197955'; // BSC Mainnet USDT
 
-// Minimal ERC20 ABI for Transfer
+// Minimal ABI
 const ERC20_ABI = [
   "function transfer(address to, uint amount) returns (bool)",
-  "function decimals() view returns (uint8)"
+  "function decimals() view returns (uint8)",
+  "function balanceOf(address owner) view returns (uint256)"
 ];
 
-// 1. Define Networks (BSC Mainnet)
+// Network Config
 const bscMainnet = {
   chainId: 56,
   name: 'Binance Smart Chain',
@@ -25,125 +39,155 @@ const bscMainnet = {
   rpcUrl: 'https://bsc-dataseed.binance.org/'
 };
 
-// 2. Create Metadata
 const metadata = {
   name: 'CryptoReg',
-  description: 'Buy Web2 Domains with Web3',
-  url: 'https://cryptoreg.app', 
+  description: 'Web3 Domain Registrar',
+  url: 'https://cryptoreg.app',
   icons: ['https://avatars.githubusercontent.com/u/37784886']
 };
 
-// 3. Create AppKit Instance
+// Initialize AppKit
 let appKit: any = null;
-
 try {
     appKit = createAppKit({
       adapters: [new EthersAdapter()],
       networks: [bscMainnet],
       metadata,
       projectId: PROJECT_ID,
-      features: {
-        analytics: true,
-        email: false, 
-        socials: [],
-      },
-      themeMode: 'dark',
-      themeVariables: {
-        '--w3m-accent': '#10b981',
-        '--w3m-border-radius-master': '1px'
-      }
+      features: { analytics: true, email: false, socials: [] },
+      themeMode: 'dark'
     });
 } catch (e) {
-    console.warn("AppKit initialization warning:", e);
+    console.error("AppKit Init Error:", e);
 }
 
 export const web3Service = {
-  // Opens the Reown Modal to Connect
+  
   connectWallet: async (): Promise<User> => {
-    if (!appKit) throw new Error("Wallet Service not initialized");
+    let provider: ethers.BrowserProvider | null = null;
+    let address = '';
 
-    await appKit.open();
+    try {
+        // Method A: Check for Injected Wallet (Bybit / Metamask) directly first
+        // This is often more reliable than the Modal for desktop users
+        // @ts-ignore
+        if (window.ethereum) {
+            // @ts-ignore
+            provider = new ethers.BrowserProvider(window.ethereum);
+            // Request access
+            await provider.send("eth_requestAccounts", []);
+        } 
+        // Method B: Use Reown AppKit if no injected provider or if user prefers
+        else if (appKit) {
+            await appKit.open();
+            const walletProvider = appKit.getProvider();
+            if (!walletProvider) throw new Error("Connection failed or cancelled");
+            provider = new ethers.BrowserProvider(walletProvider);
+        } else {
+            throw new Error("No wallet provider found");
+        }
 
-    return new Promise((resolve, reject) => {
-        const checkInterval = setInterval(async () => {
-            const state = appKit.getIsConnectedState();
-            if (state) {
-                clearInterval(checkInterval);
-                
-                try {
-                    const provider = new ethers.BrowserProvider(appKit.getProvider());
-                    const signer = await provider.getSigner();
-                    const address = await signer.getAddress();
-                    const balanceBigInt = await provider.getBalance(address);
-                    const balanceEth = ethers.formatEther(balanceBigInt);
+        if (!provider) throw new Error("Provider initialization failed");
 
-                    const realUser: User = {
-                        id: address.toLowerCase(),
-                        username: 'Wallet User',
-                        walletAddress: address,
-                        balance: {
-                            BNB: parseFloat(parseFloat(balanceEth).toFixed(4)),
-                            BUSD: 0, 
-                            USDT: 0
-                        }
-                    };
-                    resolve(realUser);
-                } catch (err) {
-                    reject(err);
-                }
+        const signer = await provider.getSigner();
+        address = await signer.getAddress();
+        
+        // Ensure network is BSC
+        const network = await provider.getNetwork();
+        if (network.chainId !== 56n) {
+            try {
+                // Try to switch to BSC
+                // @ts-ignore
+                await window.ethereum.request({
+                    method: 'wallet_switchEthereumChain',
+                    params: [{ chainId: '0x38' }], // 56 in hex
+                });
+                // Re-init provider after switch
+                // @ts-ignore
+                provider = new ethers.BrowserProvider(window.ethereum || appKit.getProvider());
+            } catch (switchError) {
+                console.warn("Could not switch network automatically", switchError);
             }
-        }, 1000);
+        }
 
-        setTimeout(() => {
-            clearInterval(checkInterval);
-        }, 60000);
-    });
+        // Get Balances
+        const balanceBigInt = await provider.getBalance(address);
+        const balanceBnB = parseFloat(ethers.formatEther(balanceBigInt));
+
+        // Get USDT Balance
+        let balanceUSDT = 0;
+        try {
+            const usdtContract = new ethers.Contract(USDT_CONTRACT_ADDRESS, ERC20_ABI, provider);
+            const usdtBal = await usdtContract.balanceOf(address);
+            balanceUSDT = parseFloat(ethers.formatUnits(usdtBal, 18));
+        } catch (e) { 
+            console.log("Could not fetch USDT balance (maybe network mismatch)"); 
+        }
+
+        return {
+            id: address.toLowerCase(),
+            username: 'Wallet User',
+            walletAddress: address,
+            balance: {
+                BNB: parseFloat(balanceBnB.toFixed(4)),
+                BUSD: 0,
+                USDT: parseFloat(balanceUSDT.toFixed(2))
+            }
+        };
+
+    } catch (error: any) {
+        console.error("Connection Error:", error);
+        throw new Error(error.message || "Failed to connect wallet");
+    }
   },
 
   disconnect: async () => {
-      if(appKit) {
-          await appKit.disconnect();
-      }
+      if(appKit) await appKit.disconnect();
   },
 
-  // Send Payment (BNB or USDT)
   sendPayment: async (amount: number, currency: string) => {
-    if (!appKit) throw new Error("Wallet Service not initialized");
-    
-    const walletProvider = appKit.getProvider();
-    if (!walletProvider) throw new Error("Please connect your wallet first.");
+    let provider: ethers.BrowserProvider;
 
-    const provider = new ethers.BrowserProvider(walletProvider);
+    // Determine provider source
+    // @ts-ignore
+    if (window.ethereum) {
+        // @ts-ignore
+        provider = new ethers.BrowserProvider(window.ethereum);
+    } else if (appKit && appKit.getProvider()) {
+        provider = new ethers.BrowserProvider(appKit.getProvider());
+    } else {
+        throw new Error("Wallet not connected");
+    }
+
     const signer = await provider.getSigner();
-    
+    const network = await provider.getNetwork();
+
+    // Enforce BSC
+    if (network.chainId !== 56n) {
+        throw new Error("Wrong Network. Please switch your wallet to Binance Smart Chain (BSC).");
+    }
+
     try {
         if (currency === 'BNB') {
-            // Native BNB Transfer
             const tx = await signer.sendTransaction({
                 to: ADMIN_WALLET,
                 value: ethers.parseEther(amount.toString())
             });
             return { success: true, hash: tx.hash, wait: tx.wait.bind(tx) };
-            
-        } else if (currency === 'USDT' || currency === 'BUSD') {
-            // Token Transfer (BEP20)
-            // Note: For BUSD you would need a different address, currently set for USDT
-            const contractAddress = USDT_CONTRACT_ADDRESS; 
-            const contract = new ethers.Contract(contractAddress, ERC20_ABI, signer);
-            
-            // USDT on BSC has 18 decimals usually, but we check or assume standard
-            // Standard parseEther works for 18 decimals
+        } 
+        else if (currency === 'USDT' || currency === 'BUSD') {
+            const contract = new ethers.Contract(USDT_CONTRACT_ADDRESS, ERC20_ABI, signer);
+            // USDT on BSC is 18 decimals
             const amountInWei = ethers.parseUnits(amount.toString(), 18);
-            
             const tx = await contract.transfer(ADMIN_WALLET, amountInWei);
             return { success: true, hash: tx.hash, wait: tx.wait.bind(tx) };
-            
-        } else {
-             throw new Error(`Currency ${currency} not supported yet.`);
+        }
+        else {
+             throw new Error(`Currency ${currency} not supported.`);
         }
     } catch (error: any) {
-        console.error("Payment Error:", error);
-        return { success: false, error: error.message };
+        console.error("Payment Failed:", error);
+        return { success: false, error: error.message || "Transaction rejected" };
     }
   }
 };
