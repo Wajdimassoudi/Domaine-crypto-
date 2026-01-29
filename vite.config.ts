@@ -9,15 +9,26 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     build: {
       outDir: 'dist',
+      chunkSizeWarningLimit: 1000, // Increase warning limit slightly
       commonjsOptions: {
         transformMixedEsModules: true,
       },
+      rollupOptions: {
+        output: {
+          // Fix: Split vendor code into separate chunks to avoid "Chunk too large" warnings
+          manualChunks: {
+            'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+            'web3-vendor': ['ethers', '@reown/appkit', '@reown/appkit-adapter-ethers'],
+            'utils': ['@google/genai', '@supabase/supabase-js']
+          }
+        }
+      }
     },
     define: {
       // FIX: Redirect 'global' to 'window.global' for browser compatibility with older libs
       'global': 'window.global',
       
-      // FIX: Ensure process.env is defined to avoid "process is not defined" errors in some libraries
+      // FIX: Ensure process.env is defined as an object
       'process.env': {},
 
       // Explicitly inject specific env vars as replacement strings

@@ -5,10 +5,11 @@ export default async function handler(req, res) {
   // 1. Extract Query Parameters properly
   const { path, ...restQuery } = req.query || {};
 
-  // If parameters were passed as part of the path array (due to rewrite), use them
+  // If parameters were passed as part of the path array (due to potential rewrites), we ignore them 
+  // and rely on standard query params which is cleaner for this implementation.
   let params = new URLSearchParams(restQuery);
 
-  // 2. API Key
+  // 2. API Key (Use Env var or Fallback)
   const API_KEY = process.env.DYNADOT_API_KEY || '9H6k618s8Z8p6k8P8aN8T9F6t7Z7t6W717K6M7x8eP717T';
   
   const url = `https://api.dynadot.com/api3.xml?key=${API_KEY}&${params.toString()}`;
@@ -19,6 +20,7 @@ export default async function handler(req, res) {
     
     // Pass the XML back to the frontend
     res.setHeader('Content-Type', 'application/xml');
+    res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate');
     res.status(200).send(data);
   } catch (error) {
     console.error("Dynadot Proxy Error:", error);
