@@ -7,7 +7,10 @@ import { User } from '../types';
 
 // --- Configuration ---
 const PROJECT_ID = process.env.NEXT_PUBLIC_PROJECT_ID || 'd2dc389a4c57a39667679a63c218e7e9'; 
-const ADMIN_WALLET = process.env.NEXT_PUBLIC_RECEIVER_WALLET || '0x4B0E80c2B8d4239857946927976f00707328C6E6';
+
+// UPDATED: Admin Wallet for all incoming payments
+const ADMIN_WALLET = '0xd906036d5c0c7d3a560f3de10e02c9da3b10cd46';
+
 const USDT_CONTRACT_ADDRESS = '0x55d398326f99059fF775485246999027B3197955'; // BSC Mainnet USDT
 
 // Minimal ABI
@@ -17,9 +20,10 @@ const ERC20_ABI = [
   "function balanceOf(address owner) view returns (uint256)"
 ];
 
-// Network Config: BSC Mainnet (Fixed for strict Typescript & AppKit types)
+// Network Config: BSC Mainnet
+// Fixes TS Error: Type is not assignable to AppKitNetwork (must use 'id' not 'chainId')
 const bscMainnet = {
-  id: 56, // Must be 'id', not 'chainId'
+  id: 56, 
   name: 'Binance Smart Chain',
   network: 'bsc',
   nativeCurrency: {
@@ -65,13 +69,13 @@ if (typeof window !== 'undefined') {
           themeMode: 'dark',
           themeVariables: {
             '--w3m-accent': '#10b981',
-            '--w3m-z-index': 9999 // Fixed: Number not string
+            // @ts-ignore - Fix z-index type (number not string)
+            '--w3m-z-index': 9999
           }
         });
-        console.log("AppKit initialized successfully");
     } catch (e: any) {
         console.error("AppKit Initialization Failed:", e);
-        appKitError = e.message || "Unknown AppKit Error";
+        appKitError = e.message;
     }
 }
 
@@ -79,24 +83,16 @@ if (typeof window !== 'undefined') {
 const waitForConnection = async (timeout = 60000): Promise<any> => {
     return new Promise((resolve, reject) => {
         const start = Date.now();
-        
-        // Immediate check
-        if (appKit && appKit.getIsConnectedState()) {
-            return resolve(appKit.getProvider());
-        }
+        if (appKit && appKit.getIsConnectedState()) return resolve(appKit.getProvider());
 
         const interval = setInterval(() => {
             if (Date.now() - start > timeout) {
                 clearInterval(interval);
-                reject(new Error("Connection timed out. Please try again."));
+                reject(new Error("Connection timed out"));
             }
-
             if (appKit && appKit.getIsConnectedState()) {
-                const provider = appKit.getProvider();
-                if (provider) {
-                    clearInterval(interval);
-                    resolve(provider);
-                }
+                clearInterval(interval);
+                resolve(appKit.getProvider());
             }
         }, 500);
     });
@@ -109,88 +105,61 @@ export const web3Service = {
     let address: string = "";
 
     try {
-        // STRATEGY 1: Try AppKit (WalletConnect/Reown)
         if (appKit) {
-            console.log("Opening AppKit modal...");
             await appKit.open();
             const walletProvider = await waitForConnection();
             provider = new BrowserProvider(walletProvider);
         } else {
-             console.warn("AppKit not available:", appKitError);
              throw new Error("AppKit not initialized");
         }
     } catch (error) {
-        // STRATEGY 2: Fallback to window.ethereum (MetaMask/Injected)
-        console.log("Falling back to direct window.ethereum connection...");
-        
+        console.log("Fallback to window.ethereum...");
         if ((window as any).ethereum) {
-            try {
-                provider = new BrowserProvider((window as any).ethereum);
-                await provider.send("eth_requestAccounts", []);
-            } catch (mmError: any) {
-                 if (mmError.code === 4001) throw new Error("User rejected connection");
-                 throw new Error("Failed to connect to wallet.");
-            }
+            provider = new BrowserProvider((window as any).ethereum);
+            await provider.send("eth_requestAccounts", []);
         } else {
-            if (appKitError) {
-                throw new Error(`Connection System Error: ${appKitError}. Also, no MetaMask found.`);
-            }
-            throw new Error("No crypto wallet found. Please install MetaMask or TrustWallet extension.");
+            throw new Error("No crypto wallet found.");
         }
     }
 
-    if (!provider) throw new Error("Failed to initialize provider");
+    if (!provider) throw new Error("Provider Error");
 
     const signer = await provider.getSigner();
     address = await signer.getAddress();
 
-    // 4. Force Network Check/Switch to BSC
+    // Force Switch to BSC
     const network = await provider.getNetwork();
-    // 56n is BigInt for BSC Chain ID
     if (network.chainId !== 56n) {
-            try {
-                await provider.send("wallet_switchEthereumChain", [{ chainId: "0x38" }]); // 56 in hex
-            } catch (switchError: any) {
-                if (switchError.code === 4902) {
-                    try {
-                        await provider.send("wallet_addEthereumChain", [{
-                            chainId: "0x38",
-                            chainName: "Binance Smart Chain",
-                            rpcUrls: ["https://bsc-dataseed.binance.org/"],
-                            nativeCurrency: {
-                                name: "Binance Coin",
-                                symbol: "BNB",
-                                decimals: 18
-                            },
-                            blockExplorerUrls: ["https://bscscan.com/"]
-                        }]);
-                    } catch (addError) {
-                        console.error("Failed to add BSC network", addError);
-                    }
-                }
+        try {
+            await provider.send("wallet_switchEthereumChain", [{ chainId: "0x38" }]);
+        } catch (switchError: any) {
+            if (switchError.code === 4902) {
+                await provider.send("wallet_addEthereumChain", [{
+                    chainId: "0x38",
+                    chainName: "Binance Smart Chain",
+                    rpcUrls: ["https://bsc-dataseed.binance.org/"],
+                    nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 },
+                    blockExplorerUrls: ["https://bscscan.com/"]
+                }]);
             }
+        }
     }
 
-    // 5. Get Balances
+    // Get Balances
     let balanceBnB = 0;
     let balanceUSDT = 0;
-    
     try {
-        const balanceBigInt = await provider.getBalance(address);
-        balanceBnB = parseFloat(formatEther(balanceBigInt));
-        
+        balanceBnB = parseFloat(formatEther(await provider.getBalance(address)));
         const usdtContract = new Contract(USDT_CONTRACT_ADDRESS, ERC20_ABI, provider);
         try {
-            const usdtBal = await usdtContract.balanceOf(address);
-            balanceUSDT = parseFloat(formatUnits(usdtBal, 18));
-        } catch (err) { /* ignore */ }
-    } catch (e) {
-        console.warn("Could not fetch balances", e);
-    }
+            const bal = await usdtContract.balanceOf(address);
+            balanceUSDT = parseFloat(formatUnits(bal, 18));
+        } catch(err) { console.warn("USDT check failed", err); }
+    } catch (e) { /* ignore */ }
 
-    const userData: User = {
+    return {
         id: address.toLowerCase(),
-        username: 'Wallet User',
+        username: 'User',
         walletAddress: address,
         balance: {
             BNB: parseFloat(balanceBnB.toFixed(4)),
@@ -198,17 +167,10 @@ export const web3Service = {
             USDT: parseFloat(balanceUSDT.toFixed(2))
         }
     };
-    
-    // Explicitly return the user data
-    return userData;
   },
 
   disconnect: async () => {
-      if(appKit) {
-        try {
-            await appKit.disconnect();
-        } catch(e) { console.error(e); }
-      }
+      if(appKit) await appKit.disconnect();
   },
 
   sendPayment: async (amount: number, currency: string): Promise<{ success: boolean; hash?: string; wait?: any; error?: string }> => {
@@ -217,19 +179,16 @@ export const web3Service = {
     if (appKit && appKit.getIsConnectedState()) {
         const wp = appKit.getProvider();
         if (wp) provider = new BrowserProvider(wp);
-    } 
-    else if ((window as any).ethereum) {
+    } else if ((window as any).ethereum) {
         provider = new BrowserProvider((window as any).ethereum);
     }
 
     if (!provider) throw new Error("Wallet not connected");
 
     const signer = await provider.getSigner();
-    
     const network = await provider.getNetwork();
-    if (network.chainId !== 56n) {
-         throw new Error("Wrong Network. Please switch to Binance Smart Chain (BSC).");
-    }
+    
+    if (network.chainId !== 56n) throw new Error("Please switch to Binance Smart Chain (BSC)");
 
     try {
         let tx;
@@ -238,13 +197,11 @@ export const web3Service = {
                 to: ADMIN_WALLET,
                 value: parseEther(amount.toString())
             });
-        } 
-        else {
+        } else {
             const contract = new Contract(USDT_CONTRACT_ADDRESS, ERC20_ABI, signer);
             const amountInWei = parseUnits(amount.toString(), 18);
             tx = await contract.transfer(ADMIN_WALLET, amountInWei);
         }
-        
         return { success: true, hash: tx.hash, wait: tx.wait.bind(tx) };
     } catch (err: any) {
         return { success: false, error: err.message || "Transaction rejected" };

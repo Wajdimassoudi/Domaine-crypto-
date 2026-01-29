@@ -2,15 +2,16 @@ export default async function handler(req, res) {
   // Logic to handle requests from the frontend
   // Frontend sends: /api/dynadot?command=search&keyword=...
   
-  // 1. Extract Query Parameters properly
   const { path, ...restQuery } = req.query || {};
-
-  // If parameters were passed as part of the path array (due to potential rewrites), we ignore them 
-  // and rely on standard query params which is cleaner for this implementation.
   let params = new URLSearchParams(restQuery);
 
-  // 2. API Key (Use Env var or Fallback)
-  const API_KEY = process.env.DYNADOT_API_KEY || '9H6k618s8Z8p6k8P8aN8T9F6t7Z7t6W717K6M7x8eP717T';
+  // REAL PRODUCTION KEY INTEGRATED HERE
+  // This file runs on the server, so users cannot see this key.
+  const API_KEY = '9H6k618s8Z8p6k8P8aN8T9F6t7Z7t6W717K6M7x8eP717T';
+  
+  // Note: API3 XML usually relies on the Key. 
+  // The Secret Key is typically for advanced signatures or RESTful IP management, 
+  // but for basic 'search' and 'register' commands via this endpoint, the API Key is sufficient.
   
   const url = `https://api.dynadot.com/api3.xml?key=${API_KEY}&${params.toString()}`;
 
@@ -20,7 +21,7 @@ export default async function handler(req, res) {
     
     // Pass the XML back to the frontend
     res.setHeader('Content-Type', 'application/xml');
-    res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate');
+    res.setHeader('Cache-Control', 's-maxage=5, stale-while-revalidate'); // Lower cache for real-time
     res.status(200).send(data);
   } catch (error) {
     console.error("Dynadot Proxy Error:", error);
