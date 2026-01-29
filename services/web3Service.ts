@@ -3,8 +3,10 @@ import { createAppKit } from '@reown/appkit';
 import { EthersAdapter } from '@reown/appkit-adapter-ethers';
 import { User } from '../types';
 
-// Access variables injected by Vite define plugin
-const PROJECT_ID = process.env.NEXT_PUBLIC_PROJECT_ID || 'd2dc389a4c57a39667679a63c218e7e9'; 
+// Fallback constants to prevent crash if Env vars are missing
+// We use a default public ID if process.env fails, ensuring the UI always loads.
+const DEFAULT_PROJECT_ID = 'd2dc389a4c57a39667679a63c218e7e9'; 
+const PROJECT_ID = process.env.NEXT_PUBLIC_PROJECT_ID || DEFAULT_PROJECT_ID;
 const ADMIN_WALLET = process.env.NEXT_PUBLIC_RECEIVER_WALLET || '0x4B0E80c2B8d4239857946927976f00707328C6E6';
 const USDT_CONTRACT_ADDRESS = '0x55d398326f99059fF775485246999027B3197955'; // BSC Mainnet USDT
 
@@ -31,19 +33,22 @@ const metadata = {
   icons: ['https://avatars.githubusercontent.com/u/37784886']
 };
 
-// Initialize AppKit
+// Initialize AppKit Safely
+// If this fails, we catch it so the website doesn't show a white screen.
 let appKit: any = null;
 try {
-    appKit = createAppKit({
-      adapters: [new EthersAdapter()],
-      networks: [bscMainnet],
-      metadata,
-      projectId: PROJECT_ID,
-      features: { analytics: true, email: false, socials: [] },
-      themeMode: 'dark'
-    });
+    if (PROJECT_ID) {
+        appKit = createAppKit({
+          adapters: [new EthersAdapter()],
+          networks: [bscMainnet],
+          metadata,
+          projectId: PROJECT_ID,
+          features: { analytics: true, email: false, socials: [] },
+          themeMode: 'dark'
+        });
+    }
 } catch (e) {
-    console.error("AppKit Init Error:", e);
+    console.warn("AppKit failed to initialize (UI will still work with Injected wallets):", e);
 }
 
 export const web3Service = {
@@ -53,7 +58,8 @@ export const web3Service = {
     let address = '';
 
     try {
-        // Method A: Check for Injected Wallet (Bybit / Metamask / Trust)
+        // PRIORITY 1: Injected Wallet (Bybit / Metamask / Trust)
+        // This is the most reliable method for desktop browsers
         // @ts-ignore
         if (window.ethereum) {
             // @ts-ignore
@@ -61,14 +67,14 @@ export const web3Service = {
             // Request access
             await provider.send("eth_requestAccounts", []);
         } 
-        // Method B: Reown AppKit Modal
+        // PRIORITY 2: Reown AppKit Modal (QR Code)
         else if (appKit) {
             await appKit.open();
             const walletProvider = appKit.getProvider();
             if (!walletProvider) throw new Error("Connection failed or cancelled");
             provider = new ethers.BrowserProvider(walletProvider);
         } else {
-            throw new Error("No wallet provider found");
+            throw new Error("No wallet found. Please install Bybit Wallet or MetaMask.");
         }
 
         if (!provider) throw new Error("Provider initialization failed");
@@ -90,13 +96,16 @@ export const web3Service = {
                 // @ts-ignore
                 provider = new ethers.BrowserProvider(window.ethereum || appKit.getProvider());
             } catch (switchError) {
-                console.warn("Could not switch network automatically", switchError);
+                console.warn("Could not switch network automatically. Please switch manually to BSC.", switchError);
             }
         }
 
-        // Get Balances
-        const balanceBigInt = await provider.getBalance(address);
-        const balanceBnB = parseFloat(ethers.formatEther(balanceBigInt));
+        // Get Balances safely
+        let balanceBnB = 0;
+        try {
+            const balanceBigInt = await provider.getBalance(address);
+            balanceBnB = parseFloat(ethers.formatEther(balanceBigInt));
+        } catch (e) { console.warn("Failed to fetch BNB balance"); }
 
         let balanceUSDT = 0;
         try {

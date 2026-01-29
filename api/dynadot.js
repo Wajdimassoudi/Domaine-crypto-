@@ -1,34 +1,19 @@
 
 export default async function handler(req, res) {
-  // Logic to handle both direct query params or path-like params from the frontend
-  // Frontend sends: /api/dynadot/command=CheckDomain&domain=...
-  // Vercel Rewrite sends this to /api/dynadot.js
+  // Logic to handle requests from the frontend
+  // Frontend sends: /api/dynadot?command=search&keyword=...
   
-  // Extract the "rest of the path" from the URL if needed, or just use query params
-  // Since we use a rewrite in vercel.json, the full URL comes in.
+  // 1. Extract Query Parameters
+  // In Vercel, req.query contains the parsed query string.
+  const queryObj = req.query || {};
   
-  let queryParams = '';
-  
-  // Check if we have standard query params
-  if (Object.keys(req.query).length > 0) {
-      queryParams = new URLSearchParams(req.query).toString();
-  } else {
-      // Fallback: try to parse from the url if it was rewritten
-      // In this specific app setup, the service calls /api/dynadot/params...
-      // The rewrite rules map /api/dynadot/(.*) -> api/dynadot.js
-      // The param string might be lost in req.query if not careful, 
-      // but usually Vercel passes the wildcard as a query param named in the rewrite (we didn't name it).
-      // However, typical Vercel functions work best with standard query params.
-      
-      // Let's assume the frontend sends standard params for safety OR the rewrite works.
-      // To be safe, we simply check req.url
-      const urlParts = req.url.split('/api/dynadot/');
-      if (urlParts.length > 1) {
-          queryParams = urlParts[1];
-      }
-  }
+  // Remove any Vercel-specific routing params if they exist (sometimes 'path' is added via rewrites)
+  delete queryObj.path; 
 
-  // API Key - Replace with process.env.DYNADOT_API_KEY in production
+  const queryParams = new URLSearchParams(queryObj).toString();
+
+  // 2. API Key - Use Environment Variable or Fallback
+  // IMPORTANT: You must add DYNADOT_API_KEY to Vercel Environment Variables
   const API_KEY = process.env.DYNADOT_API_KEY || '9H6k618s8Z8p6k8P8aN8T9F6t7Z7t6W717K6M7x8eP717T';
   
   const url = `https://api.dynadot.com/api3.xml?key=${API_KEY}&${queryParams}`;
@@ -36,9 +21,13 @@ export default async function handler(req, res) {
   try {
     const response = await fetch(url);
     const data = await response.text();
+    
+    // Pass the XML back to the frontend
     res.setHeader('Content-Type', 'application/xml');
+    res.setHeader('Access-Control-Allow-Origin', '*'); // Allow CORS if needed
     res.status(200).send(data);
   } catch (error) {
+    console.error("Dynadot Proxy Error:", error);
     res.status(500).json({ error: 'Failed to fetch from Dynadot' });
   }
 }
