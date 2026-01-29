@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { dbService } from '../services/supabaseClient'; // Real DB
 import { web3Service } from '../services/web3Service';
-import { Domain, Transaction } from '../types';
+import { Domain, TLD } from '../types';
 import { useNotification } from '../context/NotificationContext';
 import { Link } from 'react-router-dom';
 
@@ -29,7 +29,8 @@ export const Admin: React.FC = () => {
                 const mapped: Domain[] = data.map((row: any) => ({
                     id: row.id.toString(),
                     name: row.domain_name.split('.')[0],
-                    tld: '.' + row.domain_name.split('.').pop(),
+                    // Fix: Cast the string string to any or TLD to satisfy TypeScript
+                    tld: ('.' + row.domain_name.split('.').pop()) as any, 
                     fullName: row.domain_name,
                     price: 0, // Owned, price irrelevant
                     currency: 'BNB',
@@ -39,6 +40,7 @@ export const Admin: React.FC = () => {
                     registrationDate: row.created_at,
                     renewalDate: new Date(new Date(row.created_at).setFullYear(new Date(row.created_at).getFullYear() + (row.years || 1))).toISOString(),
                     views: 0,
+                    description: 'Registered Domain',
                     privacyEnabled: true,
                     autoRenew: false,
                     nameservers: row.nameservers || [],

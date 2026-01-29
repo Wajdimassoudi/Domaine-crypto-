@@ -44,9 +44,7 @@ export const Marketplace: React.FC = () => {
           if (realResults.length > 0) {
               setDomains(realResults);
           } else {
-              // Fallback: If API returns empty (or in test mode), maybe show mock dynamic for demo?
-              // For REAL MODE: We show empty or specific message.
-              // Let's create a dynamic "available" one if the exact match wasn't in list but is valid format
+              // Fallback: If API returns empty
               if (term.includes('.')) {
                   // Double check availability of specific domain
                    const isAvailable = await dynadot.checkDomain(term);
@@ -55,10 +53,10 @@ export const Marketplace: React.FC = () => {
                        setDomains([{
                            id: `real_${term}`,
                            name: parts[0],
-                           tld: '.' + parts[1] as any,
+                           tld: ('.' + parts[1]) as any,
                            fullName: term,
-                           price: 12.99, // Fallback price if API didn't return one
-                           currency: 'USD', // Base currency
+                           price: 12.99, // Fallback price
+                           currency: 'USDT', // Fix: Use USDT instead of USD to match CryptoCurrency type
                            isPremium: false,
                            owner: null,
                            isListed: true,

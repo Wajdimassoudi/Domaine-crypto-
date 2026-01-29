@@ -1,5 +1,7 @@
 import { BrowserProvider, Contract, formatEther, formatUnits, parseEther, parseUnits } from 'ethers';
+// @ts-ignore
 import { createAppKit } from '@reown/appkit';
+// @ts-ignore
 import { EthersAdapter } from '@reown/appkit-adapter-ethers';
 import { User } from '../types';
 
