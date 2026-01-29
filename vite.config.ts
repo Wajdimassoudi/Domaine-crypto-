@@ -14,8 +14,10 @@ export default defineConfig(({ mode }) => {
       },
     },
     define: {
-      // Avoid defining 'global': 'globalThis' here as it causes "Cannot set property fetch" errors
-      // with some polyfills in the browser. We polyfill window.global in index.html instead.
+      // CRITICAL FIX: Redirect 'global' identifier to 'window.global'.
+      // In index.html, we define window.global = {}. 
+      // This traps any polyfills trying to write to global.fetch, preventing them from crashing the Window.
+      'global': 'window.global',
       
       // Explicitly inject env vars
       'process.env.NEXT_PUBLIC_PROJECT_ID': JSON.stringify(env.NEXT_PUBLIC_PROJECT_ID),

@@ -78,22 +78,21 @@
         }
     </style>
     
-    <!-- 1. Load Buffer Polyfill (Critical for Web3 libraries) -->
+    <!-- 1. Load Buffer Polyfill -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/buffer/6.0.3/buffer.min.js"></script>
 
     <!-- 2. Initialize Globals -->
     <script>
-      // Fix "Buffer is not defined"
-      window.Buffer = window.Buffer || buffer.Buffer;
+      // 1. Define window.global as a plain empty object.
+      // Vite is configured to replace the variable 'global' with 'window.global'.
+      // This means "global.fetch = ..." becomes "window.global.fetch = ...", which is safe.
+      window.global = {};
       
-      // Fix "process is not defined"
+      // 2. Polyfill Buffer and Process
+      window.Buffer = window.Buffer || buffer.Buffer;
       window.process = window.process || { env: { NODE_ENV: 'production' } };
       
-      // Fix "Cannot set property fetch"
-      // We set global to an empty object so libraries can attach to it without conflicting with window read-only props
-      window.global = window.global || {};
-      
-      // Map Buffer/process to global for libraries that look for global.Buffer
+      // 3. Attach them to our safe global object for libraries that look there
       window.global.Buffer = window.Buffer;
       window.global.process = window.process;
     </script>
