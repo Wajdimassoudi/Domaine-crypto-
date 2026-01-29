@@ -3,10 +3,8 @@ import { createAppKit } from '@reown/appkit';
 import { EthersAdapter } from '@reown/appkit-adapter-ethers';
 import { User } from '../types';
 
-// Fallback constants to prevent crash if Env vars are missing
-// We use a default public ID if process.env fails, ensuring the UI always loads.
-const DEFAULT_PROJECT_ID = 'd2dc389a4c57a39667679a63c218e7e9'; 
-const PROJECT_ID = process.env.NEXT_PUBLIC_PROJECT_ID || DEFAULT_PROJECT_ID;
+// Configuration
+const PROJECT_ID = process.env.NEXT_PUBLIC_PROJECT_ID || 'd2dc389a4c57a39667679a63c218e7e9';
 const ADMIN_WALLET = process.env.NEXT_PUBLIC_RECEIVER_WALLET || '0x4B0E80c2B8d4239857946927976f00707328C6E6';
 const USDT_CONTRACT_ADDRESS = '0x55d398326f99059fF775485246999027B3197955'; // BSC Mainnet USDT
 
@@ -17,7 +15,7 @@ const ERC20_ABI = [
   "function balanceOf(address owner) view returns (uint256)"
 ];
 
-// Network Config
+// Network Config: BSC Mainnet (Chain ID 56)
 const bscMainnet = {
   chainId: 56,
   name: 'Binance Smart Chain',
@@ -33,74 +31,88 @@ const metadata = {
   icons: ['https://avatars.githubusercontent.com/u/37784886']
 };
 
-// Initialize AppKit Safely
-// If this fails, we catch it so the website doesn't show a white screen.
+// Initialize AppKit (WalletConnect v2)
+// This handles the Modal UI and connection logic for ALL wallets (MetaMask, Trust, etc.)
 let appKit: any = null;
 try {
-    if (PROJECT_ID) {
-        appKit = createAppKit({
-          adapters: [new EthersAdapter()],
-          networks: [bscMainnet],
-          metadata,
-          projectId: PROJECT_ID,
-          features: { analytics: true, email: false, socials: [] },
-          themeMode: 'dark'
-        });
-    }
+    appKit = createAppKit({
+      adapters: [new EthersAdapter()],
+      networks: [bscMainnet],
+      defaultNetwork: bscMainnet,
+      metadata,
+      projectId: PROJECT_ID,
+      features: { 
+        analytics: true, 
+        email: false, 
+        socials: [],
+        swaps: false // Disable built-in swap to keep UI clean
+      },
+      themeMode: 'dark',
+      themeVariables: {
+        '--w3m-accent': '#10b981', // Primary Emerald Color
+        '--w3m-border-radius-master': '12px'
+      }
+    });
 } catch (e) {
-    console.warn("AppKit failed to initialize (UI will still work with Injected wallets):", e);
+    console.error("AppKit Init Error:", e);
 }
+
+// Helper: Polling to wait for user to connect inside the modal
+const waitForConnection = async (timeoutMs = 60000): Promise<any> => {
+    return new Promise((resolve, reject) => {
+        const start = Date.now();
+        const interval = setInterval(() => {
+            if (Date.now() - start > timeoutMs) {
+                clearInterval(interval);
+                reject(new Error("Connection timed out"));
+            }
+            const provider = appKit.getProvider();
+            if (provider) {
+                clearInterval(interval);
+                resolve(provider);
+            }
+        }, 500);
+    });
+};
 
 export const web3Service = {
   
   connectWallet: async (): Promise<User> => {
-    let provider: ethers.BrowserProvider | null = null;
-    let address = '';
+    if (!appKit) throw new Error("Wallet Service not initialized");
 
     try {
-        // PRIORITY 1: Injected Wallet (Bybit / Metamask / Trust)
-        // This is the most reliable method for desktop browsers
-        // @ts-ignore
-        if (window.ethereum) {
-            // @ts-ignore
-            provider = new ethers.BrowserProvider(window.ethereum);
-            // Request access
-            await provider.send("eth_requestAccounts", []);
-        } 
-        // PRIORITY 2: Reown AppKit Modal (QR Code)
-        else if (appKit) {
-            await appKit.open();
-            const walletProvider = appKit.getProvider();
-            if (!walletProvider) throw new Error("Connection failed or cancelled");
-            provider = new ethers.BrowserProvider(walletProvider);
+        // 1. Force Open the WalletConnect Modal
+        // This ensures the UI always appears, no "No wallet found" errors.
+        await appKit.open();
+
+        // 2. Wait for a valid provider (User interaction in modal)
+        // We poll until AppKit reports a provider is available
+        let walletProvider;
+        if (appKit.getIsConnectedState()) {
+            walletProvider = appKit.getProvider();
         } else {
-            throw new Error("No wallet found. Please install Bybit Wallet or MetaMask.");
+             walletProvider = await waitForConnection();
         }
-
-        if (!provider) throw new Error("Provider initialization failed");
-
-        const signer = await provider.getSigner();
-        address = await signer.getAddress();
         
-        // Ensure network is BSC (Chain ID 56)
+        if (!walletProvider) throw new Error("Failed to get wallet provider");
+
+        // 3. Create Ethers Provider
+        const provider = new ethers.BrowserProvider(walletProvider);
+        const signer = await provider.getSigner();
+        const address = await signer.getAddress();
+        
+        // 4. Force Network Switch to BSC if needed
         const network = await provider.getNetwork();
         if (network.chainId !== 56n) {
             try {
-                // Try to switch to BSC
-                // @ts-ignore
-                await window.ethereum.request({
-                    method: 'wallet_switchEthereumChain',
-                    params: [{ chainId: '0x38' }], // 56 in hex
-                });
-                // Re-init provider after switch
-                // @ts-ignore
-                provider = new ethers.BrowserProvider(window.ethereum || appKit.getProvider());
+                await appKit.switchNetwork(bscMainnet); 
+                // Alternatively use provider.send('wallet_switchEthereumChain', ...)
             } catch (switchError) {
-                console.warn("Could not switch network automatically. Please switch manually to BSC.", switchError);
+                console.warn("Network switch requested but failed/cancelled", switchError);
             }
         }
 
-        // Get Balances safely
+        // 5. Fetch Balances
         let balanceBnB = 0;
         try {
             const balanceBigInt = await provider.getBalance(address);
@@ -112,9 +124,7 @@ export const web3Service = {
             const usdtContract = new ethers.Contract(USDT_CONTRACT_ADDRESS, ERC20_ABI, provider);
             const usdtBal = await usdtContract.balanceOf(address);
             balanceUSDT = parseFloat(ethers.formatUnits(usdtBal, 18));
-        } catch (e) { 
-            // Ignore error if user has no USDT or contract read fails
-        }
+        } catch (e) { /* Ignore */ }
 
         return {
             id: address.toLowerCase(),
@@ -128,8 +138,12 @@ export const web3Service = {
         };
 
     } catch (error: any) {
-        console.error("Connection Error:", error);
-        throw new Error(error.message || "Failed to connect wallet");
+        console.error("Connect Error:", error);
+        // User closed modal or rejected
+        if (error.message.includes("User rejected") || error.message.includes("timed out")) {
+            throw new Error("Connection cancelled by user");
+        }
+        throw new Error("Could not connect wallet. Please try again.");
     }
   },
 
@@ -138,22 +152,15 @@ export const web3Service = {
   },
 
   sendPayment: async (amount: number, currency: string) => {
-    let provider: ethers.BrowserProvider;
+    if (!appKit) throw new Error("Wallet not initialized");
 
-    // Determine provider source
-    // @ts-ignore
-    if (window.ethereum) {
-        // @ts-ignore
-        provider = new ethers.BrowserProvider(window.ethereum);
-    } else if (appKit && appKit.getProvider()) {
-        provider = new ethers.BrowserProvider(appKit.getProvider());
-    } else {
-        throw new Error("Wallet not connected");
-    }
-
-    const signer = await provider.getSigner();
-    
     try {
+        const walletProvider = appKit.getProvider();
+        if (!walletProvider) throw new Error("Wallet not connected");
+
+        const provider = new ethers.BrowserProvider(walletProvider);
+        const signer = await provider.getSigner();
+        
         if (currency === 'BNB') {
             const tx = await signer.sendTransaction({
                 to: ADMIN_WALLET,

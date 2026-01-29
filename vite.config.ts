@@ -20,6 +20,9 @@ export default defineConfig(({ mode }) => {
       outDir: 'dist',
     },
     define: {
+      // WalletConnect Polyfill: Fixes "global is not defined"
+      'global': 'globalThis',
+      
       // Explicitly inject the env vars needed for the client side
       'process.env.NEXT_PUBLIC_PROJECT_ID': getVal('NEXT_PUBLIC_PROJECT_ID'),
       'process.env.NEXT_PUBLIC_RECEIVER_WALLET': getVal('NEXT_PUBLIC_RECEIVER_WALLET'),
