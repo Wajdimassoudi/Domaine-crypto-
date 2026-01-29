@@ -3,24 +3,9 @@ import { createAppKit } from '@reown/appkit';
 import { EthersAdapter } from '@reown/appkit-adapter-ethers';
 import { User } from '../types';
 
-// 1. Safe Environment Access for Vite
-const getEnv = (key: string) => {
-  // @ts-ignore
-  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
-      // @ts-ignore
-      return import.meta.env[key];
-  }
-  // @ts-ignore
-  if (typeof process !== 'undefined' && process.env && process.env[key]) {
-      // @ts-ignore
-      return process.env[key];
-  }
-  return '';
-};
-
-// Configuration
-const PROJECT_ID = getEnv('NEXT_PUBLIC_PROJECT_ID') || 'd2dc389a4c57a39667679a63c218e7e9';
-const ADMIN_WALLET = getEnv('NEXT_PUBLIC_RECEIVER_WALLET') || '0x4B0E80c2B8d4239857946927976f00707328C6E6';
+// Access variables injected by Vite define plugin
+const PROJECT_ID = process.env.NEXT_PUBLIC_PROJECT_ID || 'd2dc389a4c57a39667679a63c218e7e9'; 
+const ADMIN_WALLET = process.env.NEXT_PUBLIC_RECEIVER_WALLET || '0x4B0E80c2B8d4239857946927976f00707328C6E6';
 const USDT_CONTRACT_ADDRESS = '0x55d398326f99059fF775485246999027B3197955'; // BSC Mainnet USDT
 
 // Minimal ABI
@@ -68,8 +53,7 @@ export const web3Service = {
     let address = '';
 
     try {
-        // Method A: Check for Injected Wallet (Bybit / Metamask) directly first
-        // This is often more reliable than the Modal for desktop users
+        // Method A: Check for Injected Wallet (Bybit / Metamask / Trust)
         // @ts-ignore
         if (window.ethereum) {
             // @ts-ignore
@@ -77,7 +61,7 @@ export const web3Service = {
             // Request access
             await provider.send("eth_requestAccounts", []);
         } 
-        // Method B: Use Reown AppKit if no injected provider or if user prefers
+        // Method B: Reown AppKit Modal
         else if (appKit) {
             await appKit.open();
             const walletProvider = appKit.getProvider();
@@ -92,7 +76,7 @@ export const web3Service = {
         const signer = await provider.getSigner();
         address = await signer.getAddress();
         
-        // Ensure network is BSC
+        // Ensure network is BSC (Chain ID 56)
         const network = await provider.getNetwork();
         if (network.chainId !== 56n) {
             try {
@@ -114,14 +98,13 @@ export const web3Service = {
         const balanceBigInt = await provider.getBalance(address);
         const balanceBnB = parseFloat(ethers.formatEther(balanceBigInt));
 
-        // Get USDT Balance
         let balanceUSDT = 0;
         try {
             const usdtContract = new ethers.Contract(USDT_CONTRACT_ADDRESS, ERC20_ABI, provider);
             const usdtBal = await usdtContract.balanceOf(address);
             balanceUSDT = parseFloat(ethers.formatUnits(usdtBal, 18));
         } catch (e) { 
-            console.log("Could not fetch USDT balance (maybe network mismatch)"); 
+            // Ignore error if user has no USDT or contract read fails
         }
 
         return {
@@ -160,13 +143,7 @@ export const web3Service = {
     }
 
     const signer = await provider.getSigner();
-    const network = await provider.getNetwork();
-
-    // Enforce BSC
-    if (network.chainId !== 56n) {
-        throw new Error("Wrong Network. Please switch your wallet to Binance Smart Chain (BSC).");
-    }
-
+    
     try {
         if (currency === 'BNB') {
             const tx = await signer.sendTransaction({
@@ -177,7 +154,6 @@ export const web3Service = {
         } 
         else if (currency === 'USDT' || currency === 'BUSD') {
             const contract = new ethers.Contract(USDT_CONTRACT_ADDRESS, ERC20_ABI, signer);
-            // USDT on BSC is 18 decimals
             const amountInWei = ethers.parseUnits(amount.toString(), 18);
             const tx = await contract.transfer(ADMIN_WALLET, amountInWei);
             return { success: true, hash: tx.hash, wait: tx.wait.bind(tx) };
