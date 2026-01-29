@@ -4,8 +4,17 @@ import { EthersAdapter } from '@reown/appkit-adapter-ethers';
 import { User } from '../types';
 
 // --- CONFIGURATION ---
-const PROJECT_ID = 'd2dc389a4c57a39667679a63c218e7e9'; // Your Reown Project ID
+const PROJECT_ID = process.env.NEXT_PUBLIC_PROJECT_ID || 'd2dc389a4c57a39667679a63c218e7e9'; 
 const ADMIN_WALLET = process.env.NEXT_PUBLIC_RECEIVER_WALLET || '0x4B0E...ReplaceWithYourRealWallet...'; 
+
+// USDT Contract Address on BSC Mainnet
+const USDT_CONTRACT_ADDRESS = '0x55d398326f99059fF775485246999027B3197955';
+
+// Minimal ERC20 ABI for Transfer
+const ERC20_ABI = [
+  "function transfer(address to, uint amount) returns (bool)",
+  "function decimals() view returns (uint8)"
+];
 
 // 1. Define Networks (BSC Mainnet)
 const bscMainnet = {
@@ -20,12 +29,11 @@ const bscMainnet = {
 const metadata = {
   name: 'CryptoReg',
   description: 'Buy Web2 Domains with Web3',
-  url: 'https://cryptoreg.app', // Update with your actual domain later
+  url: 'https://cryptoreg.app', 
   icons: ['https://avatars.githubusercontent.com/u/37784886']
 };
 
 // 3. Create AppKit Instance
-// We perform a check to ensure we only create it once in the browser environment
 let appKit: any = null;
 
 try {
@@ -41,12 +49,12 @@ try {
       },
       themeMode: 'dark',
       themeVariables: {
-        '--w3m-accent': '#10b981', // Your Primary Color
+        '--w3m-accent': '#10b981',
         '--w3m-border-radius-master': '1px'
       }
     });
 } catch (e) {
-    console.warn("AppKit initialization warning (likely already initialized):", e);
+    console.warn("AppKit initialization warning:", e);
 }
 
 export const web3Service = {
@@ -54,10 +62,8 @@ export const web3Service = {
   connectWallet: async (): Promise<User> => {
     if (!appKit) throw new Error("Wallet Service not initialized");
 
-    // Open the modal
     await appKit.open();
 
-    // Wait for connection (Polling simple check for MVP)
     return new Promise((resolve, reject) => {
         const checkInterval = setInterval(async () => {
             const state = appKit.getIsConnectedState();
@@ -65,7 +71,6 @@ export const web3Service = {
                 clearInterval(checkInterval);
                 
                 try {
-                    // Get Provider from the Adapter
                     const provider = new ethers.BrowserProvider(appKit.getProvider());
                     const signer = await provider.getSigner();
                     const address = await signer.getAddress();
@@ -89,27 +94,22 @@ export const web3Service = {
             }
         }, 1000);
 
-        // Timeout after 60 seconds
         setTimeout(() => {
             clearInterval(checkInterval);
-            // Don't reject, just let the user close or try again, 
-            // but for code flow we stop polling.
         }, 60000);
     });
   },
 
-  // Disconnect function
   disconnect: async () => {
       if(appKit) {
           await appKit.disconnect();
       }
   },
 
-  // Send Payment using the Reown Provider
+  // Send Payment (BNB or USDT)
   sendPayment: async (amount: number, currency: string) => {
     if (!appKit) throw new Error("Wallet Service not initialized");
     
-    // Get the provider from AppKit (supports MetaMask, WalletConnect, etc.)
     const walletProvider = appKit.getProvider();
     if (!walletProvider) throw new Error("Please connect your wallet first.");
 
@@ -118,13 +118,28 @@ export const web3Service = {
     
     try {
         if (currency === 'BNB') {
+            // Native BNB Transfer
             const tx = await signer.sendTransaction({
                 to: ADMIN_WALLET,
                 value: ethers.parseEther(amount.toString())
             });
             return { success: true, hash: tx.hash, wait: tx.wait.bind(tx) };
+            
+        } else if (currency === 'USDT' || currency === 'BUSD') {
+            // Token Transfer (BEP20)
+            // Note: For BUSD you would need a different address, currently set for USDT
+            const contractAddress = USDT_CONTRACT_ADDRESS; 
+            const contract = new ethers.Contract(contractAddress, ERC20_ABI, signer);
+            
+            // USDT on BSC has 18 decimals usually, but we check or assume standard
+            // Standard parseEther works for 18 decimals
+            const amountInWei = ethers.parseUnits(amount.toString(), 18);
+            
+            const tx = await contract.transfer(ADMIN_WALLET, amountInWei);
+            return { success: true, hash: tx.hash, wait: tx.wait.bind(tx) };
+            
         } else {
-             throw new Error("Automatic USDT/BUSD payment not configured yet. Please pay in BNB.");
+             throw new Error(`Currency ${currency} not supported yet.`);
         }
     } catch (error: any) {
         console.error("Payment Error:", error);
