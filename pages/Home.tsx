@@ -1,203 +1,147 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { mockBackend } from '../services/mockBackend';
-import { Domain } from '../types';
-import { DomainCard } from '../components/DomainCard';
-import { LiveActivity } from '../components/LiveActivity';
+import { Product, Category } from '../types';
+import { ProductCard } from '../components/ProductCard';
 
 export const Home: React.FC = () => {
-  const [featured, setFeatured] = useState<Domain[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeTld, setActiveTld] = useState('.com');
-  const navigate = useNavigate();
+  const [products, setProducts] = useState<Product[]>([]);
+  const [flashDeals, setFlashDeals] = useState<Product[]>([]);
 
   useEffect(() => {
-    const all = mockBackend.getDomains();
-    setFeatured(all.filter(d => d.isListed).slice(0, 4));
+    const all = mockBackend.getProducts();
+    setProducts(all);
+    setFlashDeals(all.slice(0, 4));
   }, []);
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      navigate(`/marketplace?search=${encodeURIComponent(searchQuery)}`);
-    }
-  };
-
-  const tlds = ['.com', '.net', '.io', '.ai', '.org'];
+  const categories: {name: Category, icon: string}[] = [
+      { name: 'Electronics', icon: 'fa-microchip' },
+      { name: 'Phones', icon: 'fa-mobile-alt' },
+      { name: 'Fashion', icon: 'fa-tshirt' },
+      { name: 'Home', icon: 'fa-couch' },
+      { name: 'Crypto Hardware', icon: 'fa-key' },
+      { name: 'Beauty', icon: 'fa-spa' }
+  ];
 
   return (
-    <div className="min-h-screen">
-      <div className="fixed top-20 w-full z-40">
-        <LiveActivity />
-      </div>
-
-      {/* Hero Section */}
-      <div className="relative pt-40 pb-20 lg:pt-56 lg:pb-32 overflow-hidden">
-        {/* Animated Background */}
-        <div className="absolute inset-0 bg-darker">
-            <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/10 via-darker to-darker opacity-50"></div>
-            <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-secondary/10 rounded-full blur-[120px] animate-float"></div>
-        </div>
+    <div className="min-h-screen bg-gray-100 pt-32 pb-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
-        <div className="mx-auto max-w-7xl px-6 lg:px-8 relative z-10">
-          <div className="text-center max-w-3xl mx-auto">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-primary text-xs font-bold mb-6 tracking-wide uppercase">
-              <span className="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
-              The Web3 Registrar
-            </div>
-            <h1 className="text-5xl font-display font-bold tracking-tight text-white sm:text-7xl mb-6">
-              Claim your <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">Web2 Identity</span> with Crypto.
-            </h1>
-            <p className="text-lg text-gray-400 mb-10 leading-relaxed">
-              Buy, sell, and manage standard domains (.com, .net, .io) using BNB, BUSD, or USDT. No credit card required. Pure anonymity on BSC.
-            </p>
+        {/* Hero Area */}
+        <div className="grid grid-cols-12 gap-4 mb-8">
             
-            {/* Search Bar */}
-            <form onSubmit={handleSearch} className="relative max-w-2xl mx-auto group z-20">
-                <div className="absolute -inset-1 bg-gradient-to-r from-primary via-secondary to-primary rounded-2xl opacity-50 group-hover:opacity-100 blur transition duration-500 animate-gradient-x"></div>
-                <div className="relative bg-surface rounded-xl p-2 flex items-center shadow-2xl border border-white/5">
-                    <input 
-                        type="text" 
-                        placeholder="Search for your perfect domain name..." 
-                        className="w-full bg-transparent border-none text-white px-4 py-3 text-lg focus:outline-none placeholder-gray-500 font-display"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                    <div className="hidden sm:flex items-center gap-1 pr-2 border-r border-gray-700 mr-2">
-                        {tlds.map(tld => (
-                            <button 
-                                key={tld} 
-                                type="button" 
-                                onClick={() => setActiveTld(tld)}
-                                className={`text-xs px-2 py-1 rounded hover:bg-white/10 ${activeTld === tld ? 'text-white bg-white/10' : 'text-gray-500'}`}
-                            >
-                                {tld}
-                            </button>
-                        ))}
-                    </div>
-                    <button type="submit" className="bg-primary hover:bg-primaryHover text-white px-8 py-3 rounded-lg font-bold text-lg transition-colors shadow-lg shadow-primary/20">
-                        Search
-                    </button>
+            {/* Left Sidebar (Categories) */}
+            <div className="hidden lg:block col-span-2 bg-white rounded-lg shadow-sm p-2 h-full">
+                <h3 className="font-bold text-darker px-3 py-2 text-sm uppercase">Categories</h3>
+                <ul className="space-y-1">
+                    {categories.map(c => (
+                        <li key={c.name}>
+                            <Link to={`/marketplace?cat=${c.name}`} className="flex items-center gap-3 px-3 py-2 text-gray-600 hover:bg-gray-100 hover:text-primary rounded text-sm transition-colors">
+                                <i className={`fas ${c.icon} w-5 text-center`}></i>
+                                {c.name}
+                            </Link>
+                        </li>
+                    ))}
+                </ul>
+            </div>
+
+            {/* Main Slider (Hero) */}
+            <div className="col-span-12 lg:col-span-7 relative bg-darker rounded-lg overflow-hidden shadow-sm h-[300px] lg:h-auto">
+                <div className="absolute inset-0 bg-gradient-to-r from-darker to-transparent z-10"></div>
+                <img src="https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=1000&q=80" className="absolute inset-0 w-full h-full object-cover opacity-60" alt="Banner" />
+                <div className="relative z-20 p-10 h-full flex flex-col justify-center">
+                    <span className="text-primary font-bold uppercase tracking-widest text-xs mb-2">Crypto Exclusive</span>
+                    <h1 className="text-4xl md:text-5xl font-bold text-white mb-4 leading-tight">Pay with USDT<br/>Shop the World.</h1>
+                    <p className="text-gray-300 mb-6 max-w-md">Secure, anonymous, and fast shipping global marketplace. Ledger wallets, Tech, and Fashion.</p>
+                    <Link to="/marketplace" className="bg-primary hover:bg-primaryHover text-white px-8 py-3 rounded-full font-bold w-max shadow-lg shadow-primary/30">
+                        Start Shopping
+                    </Link>
                 </div>
-            </form>
-            
-            <p className="mt-4 text-sm text-gray-500">
-                Trending: <span className="text-gray-300 cursor-pointer hover:text-primary transition-colors">ai.com</span>, <span className="text-gray-300 cursor-pointer hover:text-primary transition-colors">crypto.net</span>, <span className="text-gray-300 cursor-pointer hover:text-primary transition-colors">meta.io</span>
-            </p>
-          </div>
-        </div>
-      </div>
+            </div>
 
-      {/* Stats Section */}
-      <div className="bg-surface/50 border-y border-border py-12">
-        <div className="max-w-7xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
-            <div>
-                <div className="text-4xl font-bold text-white font-display mb-1">125K+</div>
-                <div className="text-sm text-gray-500 uppercase tracking-wider">Domains Registered</div>
-            </div>
-            <div>
-                <div className="text-4xl font-bold text-white font-display mb-1">$42M+</div>
-                <div className="text-sm text-gray-500 uppercase tracking-wider">Trading Volume</div>
-            </div>
-             <div>
-                <div className="text-4xl font-bold text-white font-display mb-1">8K+</div>
-                <div className="text-sm text-gray-500 uppercase tracking-wider">Unique Wallets</div>
-            </div>
-             <div>
-                <div className="text-4xl font-bold text-white font-display mb-1">0.5s</div>
-                <div className="text-sm text-gray-500 uppercase tracking-wider">Avg Transfer Time</div>
+            {/* Right Side (User/Promo) */}
+            <div className="hidden lg:flex col-span-3 flex-col gap-4">
+                <div className="bg-white rounded-lg p-4 shadow-sm flex-1 flex flex-col justify-center items-center text-center">
+                    <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-2">
+                        <i className="fas fa-user text-gray-400"></i>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-2">Welcome to CryptoMart</p>
+                    <div className="flex gap-2 w-full">
+                        <Link to="/marketplace" className="flex-1 bg-darker text-white text-xs py-2 rounded hover:bg-primary transition-colors">Join</Link>
+                        <Link to="/orders" className="flex-1 bg-gray-100 text-darker text-xs py-2 rounded hover:bg-gray-200">Orders</Link>
+                    </div>
+                </div>
+                <div className="bg-yellow-100 rounded-lg p-4 shadow-sm flex-1 relative overflow-hidden">
+                    <h4 className="font-bold text-yellow-800 relative z-10">Crypto Deals</h4>
+                    <p className="text-xs text-yellow-700 relative z-10">Save 20% paying with BNB</p>
+                    <i className="fab fa-bitcoin absolute -bottom-4 -right-4 text-8xl text-yellow-200 opacity-50 rotate-12"></i>
+                </div>
             </div>
         </div>
-      </div>
 
-      {/* TLD Strip */}
-      <div className="bg-dark/50 overflow-hidden">
-        <div className="mx-auto max-w-7xl px-6 py-12">
-           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-8 items-center opacity-60 grayscale hover:grayscale-0 transition-all duration-500">
-               {['.com', '.net', '.org', '.io', '.ai', '.app'].map(ext => (
-                   <div key={ext} className="text-center group cursor-pointer">
-                       <span className="text-3xl font-display font-bold text-white group-hover:text-primary transition-colors">{ext}</span>
-                   </div>
-               ))}
-           </div>
+        {/* Flash Deals */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
+            <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center gap-2">
+                    <h2 className="text-xl font-bold text-darker">Flash Deals</h2>
+                    <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded font-mono">Ending in 02:14:50</span>
+                </div>
+                <Link to="/marketplace" className="text-sm text-gray-500 hover:text-primary">See All <i className="fas fa-chevron-right text-xs"></i></Link>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {flashDeals.map(product => (
+                    <ProductCard key={product.id} product={product} />
+                ))}
+            </div>
         </div>
-      </div>
 
-      {/* Featured Grid */}
-      <div className="py-24 bg-darker">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <div className="flex justify-between items-end mb-12">
-             <div>
-                <h2 className="text-3xl font-display font-bold text-white">Premium Listings</h2>
-                <p className="text-gray-400 mt-2">Exclusive domains available for immediate transfer.</p>
+        {/* Categories Grid */}
+        <div className="mb-8">
+             <h2 className="text-xl font-bold text-darker mb-4">Just For You</h2>
+             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                 {products.map(product => (
+                     <ProductCard key={product.id} product={product} />
+                 ))}
              </div>
-             <Link to="/marketplace" className="text-primary hover:text-white transition-colors font-medium">View Market <i className="fas fa-arrow-right ml-2"></i></Link>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {featured.map(domain => (
-              <DomainCard key={domain.id} domain={domain} />
-            ))}
-          </div>
+             <div className="mt-8 text-center">
+                 <Link to="/marketplace" className="inline-block border border-gray-300 bg-white text-gray-700 px-8 py-3 rounded-full hover:bg-gray-50 font-medium">
+                     Load More
+                 </Link>
+             </div>
         </div>
-      </div>
 
-      {/* Features */}
-      <div className="py-24 bg-surface border-y border-border relative overflow-hidden">
-         <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-secondary/5 rounded-full blur-[100px]"></div>
-         <div className="mx-auto max-w-7xl px-6 lg:px-8 relative">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-12 text-center">
-                <div className="p-6">
-                    <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center text-primary text-3xl mx-auto mb-6">
-                        <i className="fas fa-bolt"></i>
-                    </div>
-                    <h3 className="text-xl font-bold text-white mb-3">Instant Transfer</h3>
-                    <p className="text-gray-400">Domains are pushed to your registrar account immediately after blockchain confirmation.</p>
-                </div>
-                <div className="p-6">
-                    <div className="w-16 h-16 bg-secondary/10 rounded-2xl flex items-center justify-center text-secondary text-3xl mx-auto mb-6">
-                        <i className="fas fa-user-secret"></i>
-                    </div>
-                    <h3 className="text-xl font-bold text-white mb-3">100% Anonymous</h3>
-                    <p className="text-gray-400">No personal data required. Just a wallet address and an email for domain control.</p>
-                </div>
-                <div className="p-6">
-                    <div className="w-16 h-16 bg-yellow-500/10 rounded-2xl flex items-center justify-center text-yellow-500 text-3xl mx-auto mb-6">
-                        <i className="fas fa-coins"></i>
-                    </div>
-                    <h3 className="text-xl font-bold text-white mb-3">Crypto Native</h3>
-                    <p className="text-gray-400">We accept BNB, USDT, and BUSD. Low gas fees and secure escrow on BSC.</p>
+        {/* Trust Strip */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 py-8 border-t border-gray-200">
+            <div className="flex items-center gap-4">
+                <i className="fas fa-shield-alt text-3xl text-primary"></i>
+                <div>
+                    <h4 className="font-bold text-darker">Secure Payment</h4>
+                    <p className="text-xs text-gray-500">Escrow via Smart Contract</p>
                 </div>
             </div>
-         </div>
-      </div>
+            <div className="flex items-center gap-4">
+                <i className="fas fa-truck text-3xl text-primary"></i>
+                <div>
+                    <h4 className="font-bold text-darker">Global Delivery</h4>
+                    <p className="text-xs text-gray-500">Ships to 150+ countries</p>
+                </div>
+            </div>
+             <div className="flex items-center gap-4">
+                <i className="fas fa-undo text-3xl text-primary"></i>
+                <div>
+                    <h4 className="font-bold text-darker">30 Days Return</h4>
+                    <p className="text-xs text-gray-500">Money back guarantee</p>
+                </div>
+            </div>
+             <div className="flex items-center gap-4">
+                <i className="fas fa-headset text-3xl text-primary"></i>
+                <div>
+                    <h4 className="font-bold text-darker">24/7 Support</h4>
+                    <p className="text-xs text-gray-500">Real human agents</p>
+                </div>
+            </div>
+        </div>
 
-      {/* FAQ Section */}
-      <div className="py-24 bg-darker">
-          <div className="max-w-4xl mx-auto px-6">
-              <div className="text-center mb-12">
-                  <h2 className="text-3xl font-display font-bold text-white">Frequently Asked Questions</h2>
-                  <p className="text-gray-400 mt-2">Everything you need to know about decentralized domain registration.</p>
-              </div>
-              <div className="space-y-4">
-                  <div className="bg-surface border border-border rounded-xl p-6">
-                      <h3 className="text-lg font-bold text-white mb-2">Do I truly own the domain?</h3>
-                      <p className="text-gray-400">Yes. When you purchase a domain on CryptoReg, the ownership is transferred to your account instantly. We act as a custody agent until you transfer it out to another registrar, or you can manage DNS directly here.</p>
-                  </div>
-                  <div className="bg-surface border border-border rounded-xl p-6">
-                      <h3 className="text-lg font-bold text-white mb-2">Which cryptocurrencies do you accept?</h3>
-                      <p className="text-gray-400">We exclusively operate on the Binance Smart Chain (BSC). We accept BNB, BUSD, and USDT (BEP20). Ensure you are on the BSC network to avoid fund loss.</p>
-                  </div>
-                  <div className="bg-surface border border-border rounded-xl p-6">
-                      <h3 className="text-lg font-bold text-white mb-2">How does the transfer process work?</h3>
-                      <p className="text-gray-400">If you already own a domain, go to the 'Transfer' page, enter the domain and Auth Code. Once the blockchain transaction confirms the fee, we automate the EPP transfer process which takes 5-7 days.</p>
-                  </div>
-                   <div className="bg-surface border border-border rounded-xl p-6">
-                      <h3 className="text-lg font-bold text-white mb-2">Is there a renewal fee?</h3>
-                      <p className="text-gray-400">Yes, standard TLDs (.com, .net, etc.) have annual registry fees. You can pay these fees in crypto via your dashboard. We send reminders to your wallet notifications.</p>
-                  </div>
-              </div>
-          </div>
       </div>
     </div>
   );

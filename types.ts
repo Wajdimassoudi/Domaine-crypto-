@@ -1,42 +1,28 @@
-export type CryptoCurrency = 'BNB' | 'BUSD' | 'USDT'; // BEP20 Only
+export type CryptoCurrency = 'BNB' | 'BUSD' | 'USDT';
 
-export type TLD = 
-  | '.com' | '.net' | '.org' | '.io' | '.ai' | '.co' | '.app' | '.xyz'
-  | '.art' | '.info' | '.biz' | '.dev' | '.tech' | '.cloud' | '.me'
-  | '.online' | '.site' | '.store' | '.shop' | '.club' | '.vip' | '.top'
-  | '.work' | '.link' | '.click' | '.design' | '.fun' | '.wiki' | '.ink'
-  | '.space' | '.tv' | '.cc' | '.gg' | '.vc';
+export type Category = 
+  | 'Electronics' | 'Phones' | 'Computer' | 'Fashion' 
+  | 'Home' | 'Beauty' | 'Crypto Hardware' | 'Toys' | 'Automotive';
 
-export interface DnsRecord {
+export interface Product {
   id: string;
-  type: 'A' | 'CNAME' | 'MX' | 'TXT';
-  host: string;
-  value: string;
-  ttl: number;
-}
-
-export interface Domain {
-  id: string;
-  name: string;
-  tld: TLD;
-  fullName: string;
+  title: string;
   price: number;
   currency: CryptoCurrency;
-  isPremium: boolean;
-  owner: string | null;
-  isListed: boolean;
-  registrationDate?: string;
-  renewalDate?: string;
-  views: number;
-  description?: string;
-  // New features
-  privacyEnabled: boolean;
-  autoRenew: boolean;
-  nameservers: string[];
-  dnsRecords: DnsRecord[];
-  // Dynadot specific features
-  forwardingEmail?: string; // Target email for forwarding (e.g., gmail)
-  emailAlias?: string; // The alias (e.g., info@domain.com)
+  originalPrice?: number; // For discount display
+  rating: number;
+  reviews: number;
+  image: string; // URL
+  category: Category;
+  description: string;
+  stock: number;
+  sold: number;
+  shipping: string; // e.g., "Free Shipping"
+  specs?: Record<string, string>;
+}
+
+export interface CartItem extends Product {
+  quantity: number;
 }
 
 export interface User {
@@ -50,15 +36,37 @@ export interface User {
   }
 }
 
-export interface Transaction {
+export interface Order {
   id: string;
-  domainId: string;
-  domainName: string;
   buyer: string;
-  amount: number;
+  total: number;
   currency: CryptoCurrency;
+  items: CartItem[];
   date: string;
   hash: string;
-  network: 'BSC (BEP20)';
-  years: number; // Added registration duration
+  status: 'Processing' | 'Shipped' | 'Delivered';
+  shippingInfo: {
+      fullName: string;
+      address: string;
+      city: string;
+      country: string;
+  }
+}
+
+export interface Domain {
+  id: string;
+  name: string;
+  tld: string;
+  fullName: string;
+  price: number;
+  currency: CryptoCurrency;
+  isPremium: boolean;
+  owner: string | null;
+  isListed: boolean;
+  views: number;
+  description: string;
+  privacyEnabled: boolean;
+  autoRenew: boolean;
+  nameservers: string[];
+  dnsRecords: any[];
 }

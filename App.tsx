@@ -4,24 +4,24 @@ import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { Home } from './pages/Home';
 import { Marketplace } from './pages/Marketplace';
-import { DomainDetails } from './pages/DomainDetails';
+import { ProductDetails } from './pages/ProductDetails';
+import { Cart } from './pages/Cart';
 import { Admin } from './pages/Admin';
-import { Transfer } from './pages/Transfer';
 import { NotificationProvider } from './context/NotificationContext';
 
 const App: React.FC = () => {
   return (
     <NotificationProvider>
       <Router>
-        <div className="flex flex-col min-h-screen bg-darker text-white font-sans selection:bg-primary selection:text-white">
+        <div className="flex flex-col min-h-screen bg-gray-100 font-sans">
           <Navbar />
           <main className="flex-grow">
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/marketplace" element={<Marketplace />} />
-              <Route path="/transfer" element={<Transfer />} />
-              <Route path="/domain/:id" element={<DomainDetails />} />
-              <Route path="/admin" element={<Admin />} />
+              <Route path="/product/:id" element={<ProductDetails />} />
+              <Route path="/cart" element={<Cart />} />
+              <Route path="/orders" element={<Admin />} />
             </Routes>
           </main>
           <Footer />
