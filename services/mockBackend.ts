@@ -6,13 +6,19 @@ const STORAGE_KEYS = {
   ORDERS: 'cryptomart_orders_v1'
 };
 
-const API_BASE = 'https://dummyjson.com';
+const APIs = {
+  dummyjson: 'https://dummyjson.com/products',
+  amazon: 'https://jsondata.reactbd.com/api/amazonproducts',
+  walmart: 'https://jsondata.reactbd.com/api/walmartproducts',
+  all: 'https://jsondata.reactbd.com/api/products'
+};
 
-// Helper to transform API product to our App Product type
-// We apply a 15% discount to make prices "competitive"
-const transformProduct = (p: any): Product => {
+// --- Transformers ---
+
+// 1. Transform DummyJSON format
+const transformDummyJSON = (p: any): Product => {
     const originalPrice = p.price;
-    const competitivePrice = parseFloat((p.price * 0.85).toFixed(2)); // Wholesale price simulation
+    const competitivePrice = parseFloat((p.price * 0.85).toFixed(2)); // 15% Off
     
     return {
         id: p.id,
@@ -21,7 +27,7 @@ const transformProduct = (p: any): Product => {
         originalPrice: originalPrice,
         currency: 'USDT',
         rating: p.rating,
-        reviews: p.stock * 2 + 10, // Simulated reviews based on stock
+        reviews: p.stock ? p.stock * 2 : 50,
         image: p.thumbnail,
         images: p.images,
         category: p.category,
@@ -29,7 +35,7 @@ const transformProduct = (p: any): Product => {
         stock: p.stock,
         sold: Math.floor(Math.random() * 500) + 50,
         shipping: p.price > 50 ? "Free Global Shipping" : "+ $15.00 Shipping",
-        brand: p.brand,
+        brand: p.brand || "Generic",
         specs: {
             "Brand": p.brand || "Generic",
             "SKU": p.sku || `SKU-${p.id}`,
@@ -39,14 +45,59 @@ const transformProduct = (p: any): Product => {
     };
 };
 
+// 2. Transform ReactBD (Amazon/Walmart) format
+const transformReactBD = (p: any, sourceName: string): Product => {
+    // ReactBD items usually have: _id, title, des, oldPrice, price, image, category
+    const originalPrice = p.price; 
+    const competitivePrice = parseFloat((p.price * 0.85).toFixed(2)); // 15% Off wholesale logic
+
+    return {
+        id: p._id || `rbd_${Math.random().toString(36).substr(2, 9)}`,
+        title: p.title,
+        price: competitivePrice,
+        originalPrice: p.oldPrice || originalPrice,
+        currency: 'USDT',
+        rating: p.rating || 4.5,
+        reviews: Math.floor(Math.random() * 200) + 20,
+        image: p.image, // ReactBD provides direct image URL
+        images: [p.image], 
+        category: p.category,
+        description: p.des || p.description || "High quality imported product directly from supplier.",
+        stock: 100, // API doesn't allow stock tracking, simulating
+        sold: Math.floor(Math.random() * 1000) + 100,
+        shipping: "Free Express Shipping",
+        brand: sourceName === 'amazon' ? 'Amazon Basic' : sourceName === 'walmart' ? 'Walmart Select' : 'Global Brand',
+        specs: {
+            "Source": sourceName === 'amazon' ? "Amazon Warehouse" : "Walmart Store",
+            "Imported": "Yes",
+            "Authenticity": "100% Verified"
+        }
+    };
+};
+
 export const mockBackend = {
   // === ASYNC API METHODS ===
 
-  getProducts: async (limit: number = 30, skip: number = 0): Promise<Product[]> => {
+  // Added 'source' parameter to switch between APIs
+  getProducts: async (limit: number = 30, skip: number = 0, source: 'dummyjson' | 'amazon' | 'walmart' | 'all' = 'dummyjson'): Promise<Product[]> => {
     try {
-        const res = await fetch(`${API_BASE}/products?limit=${limit}&skip=${skip}`);
-        const data = await res.json();
-        return data.products.map(transformProduct);
+        let products: Product[] = [];
+
+        if (source === 'dummyjson') {
+            const res = await fetch(`${APIs.dummyjson}?limit=${limit}&skip=${skip}`);
+            const data = await res.json();
+            products = data.products.map(transformDummyJSON);
+        } else {
+            // ReactBD APIs return arrays directly
+            const url = APIs[source];
+            const res = await fetch(url);
+            const data = await res.json();
+            // Since ReactBD doesn't support pagination via URL params easily in this demo, we slice locally
+            // Ideally backend does this.
+            const slicedData = data.slice(skip, skip + limit);
+            products = slicedData.map((p: any) => transformReactBD(p, source));
+        }
+        return products;
     } catch (e) {
         console.error("API Error", e);
         return [];
@@ -55,47 +106,80 @@ export const mockBackend = {
 
   getCategories: async (): Promise<string[]> => {
       try {
-          const res = await fetch(`${API_BASE}/products/category-list`);
+          const res = await fetch(`${APIs.dummyjson}/category-list`);
           const data = await res.json();
-          // Provide top 10 categories to avoid UI clutter
-          return data.slice(0, 10);
+          // Mix in some static categories for the other stores
+          return [...data.slice(0, 8), 'Electronics', 'Home', 'Fashion', 'Toys'];
       } catch (e) {
           return ['smartphones', 'laptops', 'fragrances', 'skincare', 'groceries', 'home-decoration'];
       }
   },
 
   getProductById: async (id: string | number): Promise<Product | undefined> => {
+    // Determine source by ID format or try generic fetch
+    // For this demo, we try DummyJSON first, if fails, we check internal cache or handle error
+    // NOTE: In a real app with multiple APIs, the ID should prefix the source (e.g., amzn_123)
     try {
-        const res = await fetch(`${API_BASE}/products/${id}`);
-        if(!res.ok) return undefined;
+        // Try DummyJSON logic first (numeric IDs usually)
+        if (!isNaN(Number(id))) {
+             const res = await fetch(`${APIs.dummyjson}/${id}`);
+             if(res.ok) {
+                 const data = await res.json();
+                 return transformDummyJSON(data);
+             }
+        }
+        
+        // If not found or ID is string (ReactBD uses MongoDB _id usually), 
+        // we might need to fetch all from ReactBD to find it since they don't document a single item endpoint robustly
+        // For performance in this demo, we will rely on the fact that the user clicks a product we already loaded.
+        // But to be safe, let's try fetching the 'all' endpoint and finding it.
+        const res = await fetch(APIs.all);
         const data = await res.json();
-        return transformProduct(data);
+        const found = data.find((p: any) => p._id == id || p.id == id);
+        if (found) return transformReactBD(found, 'all');
+
+        return undefined;
     } catch (e) {
         return undefined;
     }
   },
 
-  searchProducts: async (query: string, category?: string): Promise<Product[]> => {
+  searchProducts: async (query: string, category?: string, source: string = 'dummyjson'): Promise<Product[]> => {
     try {
-        let url = `${API_BASE}/products/search?q=${query}`;
-        if (category && category !== 'All') {
-            url = `${API_BASE}/products/category/${category}`;
+        if (source === 'dummyjson') {
+            let url = `${APIs.dummyjson}/search?q=${query}`;
+            if (category && category !== 'All') {
+                url = `${APIs.dummyjson}/category/${category}`;
+            }
+            const res = await fetch(url);
+            const data = await res.json();
+            return data.products.map(transformDummyJSON);
+        } else {
+            // Client-side search for ReactBD since API is simple
+            const url = APIs[source as keyof typeof APIs];
+            const res = await fetch(url);
+            const data = await res.json();
+            
+            let filtered = data.map((p: any) => transformReactBD(p, source));
+
+            if (query) {
+                filtered = filtered.filter((p: Product) => p.title.toLowerCase().includes(query.toLowerCase()));
+            }
+            if (category && category !== 'All') {
+                filtered = filtered.filter((p: Product) => p.category.toLowerCase() === category.toLowerCase());
+            }
+            return filtered;
         }
-        const res = await fetch(url);
-        const data = await res.json();
-        return data.products.map(transformProduct);
     } catch (e) {
         return [];
     }
   },
 
   getFlashDeals: async (): Promise<Product[]> => {
-      // Simulate flash deals by taking random high-discount items
-      // DummyJSON doesn't have a "deal" endpoint, so we fetch standard and pick top rated
       try {
-        const res = await fetch(`${API_BASE}/products?limit=8&skip=10&sortBy=rating&order=desc`);
+        const res = await fetch(`${APIs.dummyjson}?limit=8&skip=10&sortBy=rating&order=desc`);
         const data = await res.json();
-        return data.products.map(transformProduct);
+        return data.products.map(transformDummyJSON);
       } catch (e) { return []; }
   },
 
@@ -151,7 +235,7 @@ export const mockBackend = {
       return stored ? JSON.parse(stored) : [];
   },
 
-  // === Legacy Domain Stub (to prevent build errors) ===
+  // === Legacy Domain Stub ===
   getDomainById: (id: string): Domain | undefined => {
       return undefined;
   },
