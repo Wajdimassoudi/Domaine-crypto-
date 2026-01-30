@@ -1,24 +1,24 @@
 export type CryptoCurrency = 'BNB' | 'BUSD' | 'USDT';
 
-export type Category = 
-  | 'Electronics' | 'Phones' | 'Computer' | 'Fashion' 
-  | 'Home' | 'Beauty' | 'Crypto Hardware' | 'Toys' | 'Automotive';
+export type Category = string; // Dynamic categories from API
 
 export interface Product {
-  id: string;
+  id: string | number;
   title: string;
   price: number;
   currency: CryptoCurrency;
   originalPrice?: number; // For discount display
   rating: number;
   reviews: number;
-  image: string; // URL
+  image: string; // Thumbnail
+  images?: string[]; // Gallery
   category: Category;
   description: string;
   stock: number;
   sold: number;
   shipping: string; // e.g., "Free Shipping"
   specs?: Record<string, string>;
+  brand?: string;
 }
 
 export interface CartItem extends Product {
@@ -47,10 +47,15 @@ export interface Order {
   status: 'Processing' | 'Shipped' | 'Delivered';
   shippingInfo: {
       fullName: string;
+      email: string;
+      phone: string;
       address: string;
       city: string;
       country: string;
-  }
+      zipCode: string;
+  };
+  invoiceNumber?: string;
+  estimatedDelivery?: string;
 }
 
 export interface Domain {
