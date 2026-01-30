@@ -5,6 +5,7 @@ import { User } from '../types';
 import { GasTracker } from './GasTracker';
 import { useNotification } from '../context/NotificationContext';
 import { mockBackend } from '../services/mockBackend';
+import { dbService } from '../services/supabaseClient';
 
 export const Navbar: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -55,6 +56,10 @@ export const Navbar: React.FC = () => {
           if (realUser && realUser.walletAddress) {
               localStorage.setItem('cryptoreg_user_v3', JSON.stringify(realUser));
               setUser(realUser);
+              
+              // Track user in Supabase
+              dbService.upsertUser(realUser).catch(err => console.error("Tracking Error:", err));
+
               showNotification(`Welcome! ${realUser.walletAddress.substring(0,6)}...`, "success");
           }
       } catch (error: any) {

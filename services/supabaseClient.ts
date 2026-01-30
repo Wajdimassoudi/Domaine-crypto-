@@ -23,6 +23,24 @@ export const dbService = {
     return { data, error };
   },
 
+  // Track User Login/Connect
+  upsertUser: async (user: any) => {
+    if (!supabase) return { data: null, error: null };
+    
+    const { data, error } = await supabase
+      .from('users')
+      .upsert({ 
+          wallet_address: user.walletAddress, 
+          username: user.username,
+          last_login: new Date().toISOString(),
+          balance_usdt: user.balance?.USDT || 0,
+          balance_bnb: user.balance?.BNB || 0
+      }, { onConflict: 'wallet_address' })
+      .select();
+      
+    return { data, error };
+  },
+
   // Get user domains
   getUserDomains: async (walletAddress: string) => {
     if (!supabase) return { data: [], error: null };
