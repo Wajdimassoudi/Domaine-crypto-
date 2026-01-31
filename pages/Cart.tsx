@@ -88,7 +88,15 @@ export const Cart: React.FC = () => {
               estimatedDelivery: deliveryDate.toLocaleDateString()
           };
           
-          // Save to DB and Local
+          // 1. Send Order to Printful (Background)
+          // We don't block the UI if Printful fails (we can handle manually from DB later), but we try.
+          try {
+             await mockBackend.createPrintfulOrder(orderData, shipping);
+          } catch(pfErr) {
+             console.error("Auto-Fulfillment Error", pfErr);
+          }
+
+          // 2. Save to DB and Local
           await dbService.createOrder(orderData); 
           mockBackend.saveOrder(orderData);
           mockBackend.clearCart();

@@ -1,4 +1,5 @@
 import { Product, User, Order, Domain } from '../types';
+import { printfulService } from './printfulService';
 
 const STORAGE_KEYS = {
   CART: 'cryptomart_cart_v1',
@@ -62,7 +63,7 @@ const transformReactBD = (p: any, sourceName: string): Product => {
         image: p.image, // ReactBD provides direct image URL
         images: [p.image], 
         category: p.category,
-        description: p.des || p.description || "High quality imported product directly from supplier.",
+        description: p.description || "High quality imported product directly from supplier.",
         stock: 100, // API doesn't allow stock tracking, simulating
         sold: Math.floor(Math.random() * 1000) + 100,
         shipping: "Free Express Shipping",
@@ -78,22 +79,22 @@ const transformReactBD = (p: any, sourceName: string): Product => {
 export const mockBackend = {
   // === ASYNC API METHODS ===
 
-  // Added 'source' parameter to switch between APIs
-  getProducts: async (limit: number = 30, skip: number = 0, source: 'dummyjson' | 'amazon' | 'walmart' | 'all' = 'dummyjson'): Promise<Product[]> => {
+  // Added 'printful' support
+  getProducts: async (limit: number = 30, skip: number = 0, source: 'dummyjson' | 'amazon' | 'walmart' | 'printful' | 'all' = 'dummyjson'): Promise<Product[]> => {
     try {
         let products: Product[] = [];
 
-        if (source === 'dummyjson') {
+        if (source === 'printful') {
+            products = await printfulService.getProducts();
+        } else if (source === 'dummyjson') {
             const res = await fetch(`${APIs.dummyjson}?limit=${limit}&skip=${skip}`);
             const data = await res.json();
             products = data.products.map(transformDummyJSON);
         } else {
             // ReactBD APIs return arrays directly
-            const url = APIs[source];
+            const url = APIs[source as keyof typeof APIs];
             const res = await fetch(url);
             const data = await res.json();
-            // Since ReactBD doesn't support pagination via URL params easily in this demo, we slice locally
-            // Ideally backend does this.
             const slicedData = data.slice(skip, skip + limit);
             products = slicedData.map((p: any) => transformReactBD(p, source));
         }
@@ -108,18 +109,21 @@ export const mockBackend = {
       try {
           const res = await fetch(`${APIs.dummyjson}/category-list`);
           const data = await res.json();
-          // Mix in some static categories for the other stores
-          return [...data.slice(0, 8), 'Electronics', 'Home', 'Fashion', 'Toys'];
+          // Mix in Printful category
+          return ['Custom Merch', ...data.slice(0, 8), 'Electronics', 'Home'];
       } catch (e) {
-          return ['smartphones', 'laptops', 'fragrances', 'skincare', 'groceries', 'home-decoration'];
+          return ['Custom Merch', 'smartphones', 'laptops', 'home-decoration'];
       }
   },
 
   getProductById: async (id: string | number): Promise<Product | undefined> => {
-    // Determine source by ID format or try generic fetch
-    // For this demo, we try DummyJSON first, if fails, we check internal cache or handle error
-    // NOTE: In a real app with multiple APIs, the ID should prefix the source (e.g., amzn_123)
     try {
+        // Check if it's a Printful product
+        if (id.toString().startsWith('pf_')) {
+            const allPrintful = await printfulService.getProducts();
+            return allPrintful.find(p => p.id === id);
+        }
+
         // Try DummyJSON logic first (numeric IDs usually)
         if (!isNaN(Number(id))) {
              const res = await fetch(`${APIs.dummyjson}/${id}`);
@@ -129,10 +133,6 @@ export const mockBackend = {
              }
         }
         
-        // If not found or ID is string (ReactBD uses MongoDB _id usually), 
-        // we might need to fetch all from ReactBD to find it since they don't document a single item endpoint robustly
-        // For performance in this demo, we will rely on the fact that the user clicks a product we already loaded.
-        // But to be safe, let's try fetching the 'all' endpoint and finding it.
         const res = await fetch(APIs.all);
         const data = await res.json();
         const found = data.find((p: any) => p._id == id || p.id == id);
@@ -146,16 +146,21 @@ export const mockBackend = {
 
   searchProducts: async (query: string, category?: string, source: string = 'dummyjson'): Promise<Product[]> => {
     try {
+        // Special case: If searching Printful
+        if (source === 'printful' || category === 'Custom Merch') {
+            const all = await printfulService.getProducts();
+            return all.filter(p => p.title.toLowerCase().includes(query.toLowerCase()));
+        }
+
         if (source === 'dummyjson') {
             let url = `${APIs.dummyjson}/search?q=${query}`;
-            if (category && category !== 'All') {
+            if (category && category !== 'All' && category !== 'Custom Merch') {
                 url = `${APIs.dummyjson}/category/${category}`;
             }
             const res = await fetch(url);
             const data = await res.json();
             return data.products.map(transformDummyJSON);
         } else {
-            // Client-side search for ReactBD since API is simple
             const url = APIs[source as keyof typeof APIs];
             const res = await fetch(url);
             const data = await res.json();
@@ -177,9 +182,12 @@ export const mockBackend = {
 
   getFlashDeals: async (): Promise<Product[]> => {
       try {
-        const res = await fetch(`${APIs.dummyjson}?limit=8&skip=10&sortBy=rating&order=desc`);
-        const data = await res.json();
-        return data.products.map(transformDummyJSON);
+        // Mix some Printful products into flash deals too!
+        const printful = await printfulService.getProducts();
+        const dummy = await fetch(`${APIs.dummyjson}?limit=6&skip=10&sortBy=rating&order=desc`).then(r => r.json());
+        
+        const dummyDeals = dummy.products.map(transformDummyJSON);
+        return [...printful.slice(0, 2), ...dummyDeals];
       } catch (e) { return []; }
   },
 
@@ -208,7 +216,6 @@ export const mockBackend = {
   },
 
   saveCart: (cart: any) => {
-      // Recalculate total
       cart.total = cart.items.reduce((sum: number, i: any) => sum + (i.price * i.quantity), 0);
       localStorage.setItem(STORAGE_KEYS.CART, JSON.stringify(cart));
       window.dispatchEvent(new Event('cartUpdated'));
@@ -234,10 +241,12 @@ export const mockBackend = {
       const stored = localStorage.getItem(STORAGE_KEYS.ORDERS);
       return stored ? JSON.parse(stored) : [];
   },
-
-  // === Legacy Domain Stub ===
-  getDomainById: (id: string): Domain | undefined => {
-      return undefined;
+  
+  // Create Printful Order Proxy
+  createPrintfulOrder: async (order: Order, shipping: any) => {
+      return await printfulService.createOrder(order, shipping);
   },
+
+  getDomainById: (id: string): Domain | undefined => { return undefined; },
   purchaseDomain: (id: string, years: number = 1, nameservers: string[] = [], emailConfig: any = {}) => { return true; }
 };

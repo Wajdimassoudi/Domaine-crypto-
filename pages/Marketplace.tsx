@@ -4,7 +4,7 @@ import { mockBackend } from '../services/mockBackend';
 import { Product } from '../types';
 import { ProductCard } from '../components/ProductCard';
 
-type StoreSource = 'dummyjson' | 'amazon' | 'walmart' | 'all';
+type StoreSource = 'dummyjson' | 'amazon' | 'walmart' | 'printful' | 'all';
 
 export const Marketplace: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -16,6 +16,13 @@ export const Marketplace: React.FC = () => {
 
   const query = searchParams.get('q') || '';
   const category = searchParams.get('cat') || 'All';
+  const storeParam = searchParams.get('store');
+
+  useEffect(() => {
+    if (storeParam && ['printful', 'amazon', 'walmart'].includes(storeParam)) {
+        setCurrentStore(storeParam as StoreSource);
+    }
+  }, [storeParam]);
 
   useEffect(() => {
     const fetchResults = async () => {
@@ -36,6 +43,7 @@ export const Marketplace: React.FC = () => {
   }, [query, category, currentStore]);
 
   const tabs: {id: StoreSource, label: string, icon: string, color: string}[] = [
+      { id: 'printful', label: 'Custom Merch', icon: 'fa-tshirt', color: 'bg-indigo-600' },
       { id: 'dummyjson', label: 'Global Store', icon: 'fa-globe', color: 'bg-blue-600' },
       { id: 'amazon', label: 'Amazon Imports', icon: 'fa-amazon', color: 'bg-yellow-600' },
       { id: 'walmart', label: 'Walmart Deals', icon: 'fa-warehouse', color: 'bg-blue-500' },
@@ -67,9 +75,10 @@ export const Marketplace: React.FC = () => {
             <div className="flex items-center justify-between mb-6">
                 <div>
                     <h1 className="text-2xl font-bold text-darker flex items-center gap-2">
+                        {currentStore === 'printful' && <i className="fas fa-palette text-indigo-600"></i>}
                         {currentStore === 'amazon' && <i className="fab fa-amazon text-yellow-600"></i>}
                         {currentStore === 'walmart' && <i className="fas fa-certificate text-blue-600"></i>}
-                        {category !== 'All' ? `Category: ${category}` : 'Marketplace'}
+                        {category !== 'All' ? `Category: ${category}` : currentStore === 'printful' ? 'Premium Custom Merchandise' : 'Marketplace'}
                     </h1>
                     {query && <p className="text-gray-500 text-sm mt-1">Search results for "{query}" in {currentStore}</p>}
                 </div>
