@@ -13,79 +13,91 @@ const STORAGE_KEYS = {
 const APIs = {
   dummyjson: 'https://dummyjson.com/products',
   fakestore: 'https://fakestoreapi.com/products',
-  amazon_mock: 'https://jsondata.reactbd.com/api/amazonproducts',
-  all: 'https://jsondata.reactbd.com/api/products'
 };
 
-const transformDummyJSON = (p: any): Product => ({
-    id: `dj_${p.id}`,
-    title: p.title,
-    price: parseFloat((p.price * 0.9).toFixed(2)),
-    originalPrice: p.price,
-    currency: 'USDT',
-    rating: p.rating,
-    reviews: p.stock ? p.stock * 2 : 50,
-    image: p.thumbnail,
-    images: p.images,
-    category: p.category,
-    description: p.description,
-    stock: p.stock,
-    sold: Math.floor(Math.random() * 500) + 50,
-    shipping: "Free Global Shipping",
-    brand: p.brand || "Global Tech",
-    specs: { "Brand": p.brand || "Generic", "SKU": p.sku || `SKU-${p.id}` }
-});
+// خوارزمية توسيع المنتجات لإنشاء آلاف الخيارات
+const expandProducts = (baseProducts: any[]): Product[] => {
+    const expanded: Product[] = [];
+    const years = ["2022", "2023", "2024", "2025"];
+    const conditions = ["New", "Refurbished (A+)", "Open Box"];
 
-const transformFakeStore = (p: any): Product => ({
-    id: `fs_${p.id}`,
-    title: p.title,
-    price: p.price,
-    currency: 'USDT',
-    rating: p.rating?.rate || 4.2,
-    reviews: p.rating?.count || 120,
-    image: p.image,
-    images: [p.image],
-    category: p.category,
-    description: p.description,
-    stock: 100,
-    sold: Math.floor(Math.random() * 1000) + 100,
-    shipping: "Standard Crypto Delivery",
-    brand: "Imported",
-    specs: { "Material": "High Quality", "Source": "Global Direct" }
-});
+    baseProducts.forEach((p) => {
+        // إنشاء 10 متغيرات لكل منتج أساسي للوصول لآلاف المنتجات
+        for (let i = 0; i < 12; i++) {
+            const year = years[i % years.length];
+            const condition = conditions[i % conditions.length];
+            const isLatest = year === "2025";
+            
+            // حساب سعر تنافسي (أقل من الجملة)
+            let wholesalePrice = p.price || 100;
+            if (i > 0) wholesalePrice = wholesalePrice * (0.8 + (i * 0.05)); // تنويع الأسعار
+            const finalPrice = parseFloat((wholesalePrice * 0.9).toFixed(2)); // خصم 10% إضافي للسعر التنافسي
+
+            expanded.push({
+                id: `${p.source || 'gen'}_${p.id}_v${i}`,
+                title: `${p.title} ${isLatest ? 'Pro Max' : ''} (${year} Edition)`,
+                price: finalPrice,
+                originalPrice: parseFloat((finalPrice * 1.25).toFixed(2)),
+                currency: 'USDT',
+                rating: Math.min(5, (p.rating?.rate || p.rating || 4) + (Math.random() * 0.5)),
+                reviews: Math.floor(Math.random() * 2000) + 50,
+                image: p.image || p.thumbnail,
+                images: p.images || [p.image || p.thumbnail],
+                category: mapCategory(p.category),
+                description: `${p.description}. This ${year} model features upgraded components and is offered at a special crypto-exclusive wholesale price.`,
+                stock: Math.floor(Math.random() * 500) + 20,
+                sold: Math.floor(Math.random() * 5000) + 100,
+                shipping: "Free Express Shipping",
+                brand: p.brand || "Global Elite",
+                specs: {
+                    "Model Year": year,
+                    "Condition": condition,
+                    "Warranty": "2 Years Global",
+                    "Authenticity": "100% Guaranteed",
+                    "Wholesale ID": `WHS-${Math.floor(Math.random() * 99999)}`
+                }
+            });
+        }
+    });
+    return expanded;
+};
+
+const mapCategory = (cat: string): string => {
+    const c = cat.toLowerCase();
+    if (c.includes('phone') || c.includes('smartphones')) return 'Smartphones';
+    if (c.includes('laptop') || c.includes('pc')) return 'Computers';
+    if (c.includes('tv') || c.includes('lighting')) return 'Home & TV';
+    if (c.includes('jewelery')) return 'Jewelry';
+    if (c.includes('clothing') || c.includes('fashion')) return 'Fashion';
+    if (c.includes('game') || c.includes('console')) return 'Gaming';
+    if (c.includes('fragrance') || c.includes('beauty')) return 'Beauty';
+    return cat.charAt(0).toUpperCase() + cat.slice(1);
+};
 
 export const mockBackend = {
-  getProducts: async (limit: number = 30, skip: number = 0, source: string = 'dummyjson', page: number = 1): Promise<Product[]> => {
+  getProducts: async (limit: number = 50, skip: number = 0, source: string = 'all'): Promise<Product[]> => {
     try {
-        if (source === 'amazon') {
-            const products = await amazonApiService.searchProducts('trending', page);
-            if (products.length > 0) return products;
-            const res = await fetch(APIs.amazon_mock);
-            const data = await res.json();
-            return data.slice(0, limit).map((p: any) => ({ ...p, id: p._id, currency: 'USDT' }));
-        }
-        
         if (source === 'printful') return await printfulService.getProducts();
-
-        // Hybrid Fetch: DummyJSON + FakeStore for massive variety
-        if (source === 'dummyjson' || source === 'all') {
-            const [djRes, fsRes] = await Promise.all([
-                fetch(`${APIs.dummyjson}?limit=${limit}&skip=${skip}`),
-                fetch(APIs.fakestore)
-            ]);
-            const djData = await djRes.json();
-            const fsData = await fsRes.json();
-            
-            const djProds = djData.products.map(transformDummyJSON);
-            const fsProds = fsData.map(transformFakeStore);
-            
-            // Combine and Shuffle for diversity
-            return [...djProds, ...fsProds].sort(() => Math.random() - 0.5).slice(0, limit);
-        }
-
-        const res = await fetch(APIs.all);
-        const data = await res.json();
-        return data.slice(skip, skip + limit).map((p: any) => ({...p, currency: 'USDT'}));
+        
+        // جلب البيانات من المصادر المتعددة
+        const [djRes, fsRes] = await Promise.all([
+            fetch(`${APIs.dummyjson}?limit=100`),
+            fetch(APIs.fakestore)
+        ]);
+        
+        const djData = await djRes.json();
+        const fsData = await fsRes.json();
+        
+        // دمج وتوسيع البيانات لتصل للآلاف
+        const allBase = [
+            ...djData.products.map((p: any) => ({ ...p, source: 'dj' })),
+            ...fsData.map((p: any) => ({ ...p, source: 'fs' }))
+        ];
+        
+        const allExpanded = expandProducts(allBase);
+        
+        // الخلط العشوائي لضمان التنوع
+        return allExpanded.sort(() => Math.random() - 0.5).slice(skip, skip + limit);
     } catch (e) {
         console.error("API Fetch Error", e);
         return [];
@@ -93,55 +105,37 @@ export const mockBackend = {
   },
 
   getCategories: async (): Promise<string[]> => {
-      try {
-          const res = await fetch(`${APIs.dummyjson}/category-list`);
-          const data = await res.json();
-          return ['Custom Merch', 'Amazon Real-time', ...data.slice(0, 15)];
-      } catch (e) { return ['Custom Merch', 'Amazon Real-time']; }
+      return ['Smartphones', 'Computers', 'Home & TV', 'Fashion', 'Jewelry', 'Gaming', 'Beauty', 'Custom Merch'];
   },
 
   getProductById: async (id: string | number): Promise<Product | undefined> => {
-    const idStr = id.toString();
-    try {
-        if (idStr.startsWith('dj_')) {
-            const realId = idStr.replace('dj_', '');
-            const res = await fetch(`${APIs.dummyjson}/${realId}`);
-            return transformDummyJSON(await res.json());
-        }
-        if (idStr.startsWith('fs_')) {
-            const realId = idStr.replace('fs_', '');
-            const res = await fetch(`${APIs.fakestore}/${realId}`);
-            return transformFakeStore(await res.json());
-        }
-        return await amazonApiService.getProductDetails(idStr) || undefined;
-    } catch (e) { return undefined; }
+    // بما أننا نولد المنتجات ديناميكياً، سنقوم بجلبها والبحث عن الـ ID
+    const all = await mockBackend.getProducts(2000); 
+    return all.find(p => p.id.toString() === id.toString());
   },
 
-  searchProducts: async (query: string, category?: string, source: string = 'dummyjson'): Promise<Product[]> => {
-    try {
-        if (source === 'amazon' || category === 'Amazon Real-time') return await amazonApiService.searchProducts(query || 'best sellers');
-        
-        const res = await fetch(`${APIs.dummyjson}/search?q=${query}`);
-        const data = await res.json();
-        const djProds = data.products.map(transformDummyJSON);
-        
-        // If query is empty but category is set, handle it
-        if (!query && category && category !== 'All') {
-             const catRes = await fetch(`${APIs.dummyjson}/category/${category}`);
-             const catData = await catRes.json();
-             return catData.products.map(transformDummyJSON);
-        }
-        
-        return djProds;
-    } catch (e) { return []; }
+  searchProducts: async (query: string, category?: string, source: string = 'all'): Promise<Product[]> => {
+    const all = await mockBackend.getProducts(1000);
+    let filtered = all;
+    
+    if (category && category !== 'All') {
+        filtered = filtered.filter(p => p.category === category);
+    }
+    
+    if (query) {
+        const q = query.toLowerCase();
+        filtered = filtered.filter(p => 
+            p.title.toLowerCase().includes(q) || 
+            p.description.toLowerCase().includes(q)
+        );
+    }
+    
+    return filtered;
   },
 
   getFlashDeals: async (): Promise<Product[]> => {
-      try {
-        const res = await fetch(APIs.fakestore);
-        const data = await res.json();
-        return data.slice(0, 8).map(transformFakeStore);
-      } catch (e) { return []; }
+      const all = await mockBackend.getProducts(50);
+      return all.slice(0, 8).map(p => ({ ...p, price: parseFloat((p.price * 0.8).toFixed(2)) }));
   },
 
   getCart: () => JSON.parse(localStorage.getItem(STORAGE_KEYS.CART) || '{"items":[], "total":0}'),
