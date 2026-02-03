@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { web3Service } from '../services/web3Service';
@@ -16,13 +17,28 @@ export const Navbar: React.FC = () => {
   const [cartCount, setCartCount] = useState(0);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All');
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    return (localStorage.getItem('theme') as 'dark' | 'light') || 'dark';
+  });
 
   useEffect(() => {
-    // User Load
+    // Apply theme
+    if (theme === 'light') {
+      document.body.classList.add('light-mode');
+      document.body.style.backgroundColor = '#f3f4f6';
+      document.body.style.color = '#111827';
+    } else {
+      document.body.classList.remove('light-mode');
+      document.body.style.backgroundColor = '#05080F';
+      document.body.style.color = '#E2E8F0';
+    }
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  useEffect(() => {
     const savedUser = localStorage.getItem('cryptoreg_user_v3');
     if (savedUser) try { setUser(JSON.parse(savedUser)); } catch (e) {}
 
-    // Cart Load & Listen
     const updateCart = () => {
         const cart = mockBackend.getCart();
         const count = cart.items.reduce((acc: number, item: any) => acc + item.quantity, 0);
@@ -36,6 +52,10 @@ export const Navbar: React.FC = () => {
   const handleSearch = (e: React.FormEvent) => {
       e.preventDefault();
       navigate(`/marketplace?q=${search}&cat=${category}`);
+  };
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
 
   const handleAuth = async () => {
@@ -56,10 +76,7 @@ export const Navbar: React.FC = () => {
           if (realUser && realUser.walletAddress) {
               localStorage.setItem('cryptoreg_user_v3', JSON.stringify(realUser));
               setUser(realUser);
-              
-              // Track user in Supabase
               dbService.upsertUser(realUser).catch(err => console.error("Tracking Error:", err));
-
               showNotification(`Welcome! ${realUser.walletAddress.substring(0,6)}...`, "success");
           }
       } catch (error: any) {
@@ -68,22 +85,24 @@ export const Navbar: React.FC = () => {
     }
   };
 
+  const menuCategories = [
+    'Smartphones', 'Computers', 'Home & TV', 'Fashion', 'Jewelry & Watches', 'Gaming & Play', 'Beauty & Health', 'Crypto Hardware'
+  ];
+
   return (
-    <nav className="fixed w-full z-50 bg-darker border-b border-border shadow-xl">
+    <nav className={`fixed w-full z-50 border-b shadow-xl transition-colors duration-300 ${theme === 'dark' ? 'bg-darker border-border' : 'bg-white border-gray-200'}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20 gap-4">
           
-          {/* Logo */}
           <Link to="/" className="flex items-center gap-2 group min-w-max">
             <div className="w-9 h-9 bg-gradient-to-br from-primary to-yellow-400 rounded-lg flex items-center justify-center text-darker font-bold text-xl transform group-hover:rotate-12 transition-transform">
               <i className="fas fa-shopping-bag"></i>
             </div>
-            <span className="text-2xl font-display font-bold text-white tracking-tight hidden md:block">
+            <span className={`text-2xl font-display font-bold tracking-tight hidden md:block ${theme === 'dark' ? 'text-white' : 'text-darker'}`}>
               Crypto<span className="text-primary">Mart</span>
             </span>
           </Link>
 
-          {/* Search Bar - Amazon Style */}
           <form onSubmit={handleSearch} className="flex-grow max-w-2xl hidden sm:flex">
              <div className="flex w-full bg-white rounded-lg overflow-hidden border-2 border-primary/50 focus-within:border-primary transition-colors">
                 <select 
@@ -91,15 +110,12 @@ export const Navbar: React.FC = () => {
                     onChange={(e) => setCategory(e.target.value)}
                     className="bg-gray-100 text-gray-700 px-3 py-2 text-sm border-r border-gray-300 outline-none hover:bg-gray-200 cursor-pointer max-w-[120px]"
                 >
-                    <option value="All">All Categories</option>
-                    <option value="Electronics">Electronics</option>
-                    <option value="Fashion">Fashion</option>
-                    <option value="Home">Home</option>
-                    <option value="Crypto Hardware">Crypto Hardware</option>
+                    <option value="All">Categories</option>
+                    {menuCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                 </select>
                 <input 
                     type="text" 
-                    placeholder="Search for products..." 
+                    placeholder="Search thousands of products..." 
                     className="flex-grow px-4 py-2 text-darker outline-none"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
@@ -110,34 +126,28 @@ export const Navbar: React.FC = () => {
              </div>
           </form>
 
-          {/* Right Actions */}
           <div className="flex items-center gap-4 min-w-max">
+            <button onClick={toggleTheme} className={`p-2 rounded-full transition-colors ${theme === 'dark' ? 'text-yellow-400 hover:bg-surface' : 'text-gray-500 hover:bg-gray-100'}`}>
+                <i className={`fas ${theme === 'dark' ? 'fa-sun' : 'fa-moon'} text-xl`}></i>
+            </button>
+
             <GasTracker />
             
             <Link to="/cart" className="relative group p-2">
-                <i className="fas fa-shopping-cart text-2xl text-gray-300 group-hover:text-primary transition-colors"></i>
+                <i className={`fas fa-shopping-cart text-2xl group-hover:text-primary transition-colors ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}></i>
                 {cartCount > 0 && (
                     <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-darker">
                         {cartCount}
                     </span>
                 )}
-                <div className="hidden group-hover:block absolute top-full right-0 text-xs text-white bg-darker p-2 rounded border border-border mt-2 whitespace-nowrap">
-                    View Cart
-                </div>
             </Link>
-
-            {user && (
-                 <Link to="/orders" className="text-gray-300 hover:text-white flex flex-col items-center text-xs">
-                    <span className="font-bold">My Orders</span>
-                 </Link>
-            )}
 
             <button
               onClick={handleAuth}
               disabled={loading}
               className={`flex items-center gap-2 px-4 py-2 rounded-full font-medium text-sm transition-all ${
                 user 
-                ? 'bg-surface border border-border hover:border-primary text-gray-300' 
+                ? (theme === 'dark' ? 'bg-surface border border-border text-gray-300' : 'bg-gray-100 border border-gray-200 text-gray-700') 
                 : 'bg-primary hover:bg-primaryHover text-white'
               }`}
             >
@@ -151,35 +161,16 @@ export const Navbar: React.FC = () => {
             </button>
           </div>
         </div>
-        
-        {/* Mobile Search */}
-        <div className="sm:hidden pb-4">
-             <form onSubmit={handleSearch} className="flex w-full bg-white rounded-lg overflow-hidden border border-primary">
-                <input 
-                    type="text" 
-                    placeholder="Search..." 
-                    className="flex-grow px-4 py-2 text-darker outline-none text-sm"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                />
-                <button type="submit" className="bg-primary text-white px-4">
-                    <i className="fas fa-search"></i>
-                </button>
-             </form>
-        </div>
       </div>
       
-      {/* Category Strip */}
-      <div className="bg-surface border-t border-border hidden md:block">
+      <div className={`border-t transition-colors duration-300 hidden md:block ${theme === 'dark' ? 'bg-surface border-border' : 'bg-gray-50 border-gray-200'}`}>
           <div className="max-w-7xl mx-auto px-4 flex gap-6 text-sm py-2 overflow-x-auto">
-              <Link to="/marketplace?cat=All" className="text-white font-bold hover:text-primary">All</Link>
-              <Link to="/marketplace?cat=Electronics" className="text-gray-400 hover:text-white">Electronics</Link>
-              <Link to="/marketplace?cat=Fashion" className="text-gray-400 hover:text-white">Fashion</Link>
-              <Link to="/marketplace?cat=Home" className="text-gray-400 hover:text-white">Home & Garden</Link>
-              <Link to="/marketplace?cat=Crypto Hardware" className="text-gray-400 hover:text-white">Crypto Hardware</Link>
-              <Link to="/marketplace?cat=Beauty" className="text-gray-400 hover:text-white">Beauty</Link>
+              <Link to="/marketplace?cat=All" className={`font-bold hover:text-primary ${theme === 'dark' ? 'text-white' : 'text-darker'}`}>All</Link>
+              {menuCategories.slice(0, 6).map(cat => (
+                  <Link key={cat} to={`/marketplace?cat=${cat}`} className={`hover:text-primary ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>{cat}</Link>
+              ))}
               <div className="flex-grow"></div>
-              <span className="text-primary font-bold"><i className="fas fa-bolt"></i> Flash Deals</span>
+              <span className="text-primary font-bold animate-pulse"><i className="fas fa-bolt"></i> Live Discounts</span>
           </div>
       </div>
     </nav>

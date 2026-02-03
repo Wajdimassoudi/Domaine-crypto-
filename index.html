@@ -106,18 +106,45 @@
 
     <!-- 2. Initialize Globals -->
     <script>
-      // 1. Define window.global as a plain empty object.
-      // Vite is configured to replace the variable 'global' with 'window.global'.
-      // This means "global.fetch = ..." becomes "window.global.fetch = ...", which is safe.
-      window.global = {};
-      
-      // 2. Polyfill Buffer and Process
-      window.Buffer = window.Buffer || buffer.Buffer;
-      window.process = window.process || { env: { NODE_ENV: 'production' } };
-      
-      // 3. Attach them to our safe global object for libraries that look there
-      window.global.Buffer = window.Buffer;
-      window.global.process = window.process;
+      (function() {
+        // Create a safe global object that is NOT the Window object itself
+        // This avoids "read-only property" errors (e.g. for window.fetch) 
+        // when libraries try to overwrite properties on the 'global' identifier.
+        const safeGlobal = {};
+        
+        // Define it on window so it's accessible as window.global
+        try {
+          Object.defineProperty(window, 'global', {
+            value: safeGlobal,
+            configurable: true,
+            enumerable: true,
+            writable: true
+          });
+        } catch (e) {
+          window.global = safeGlobal;
+        }
+
+        // Copy essential window methods to safeGlobal for library compatibility
+        // Using bind(window) ensures functions like setTimeout/fetch work correctly
+        ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'fetch', 'console', 'location', 'navigator'].forEach(key => {
+          if (typeof window[key] !== 'undefined') {
+            try {
+                safeGlobal[key] = typeof window[key] === 'function' ? window[key].bind(window) : window[key];
+            } catch (e) {
+                // Fallback for non-bindable properties
+                safeGlobal[key] = window[key];
+            }
+          }
+        });
+
+        // Polyfill Buffer and Process onto window and our safeGlobal
+        window.Buffer = window.Buffer || (typeof buffer !== 'undefined' ? buffer.Buffer : undefined);
+        window.process = window.process || { env: { NODE_ENV: 'production' } };
+        
+        safeGlobal.Buffer = window.Buffer;
+        safeGlobal.process = window.process;
+        safeGlobal.global = safeGlobal; // Circular reference like window.window
+      })();
     </script>
 
 <script type="importmap">

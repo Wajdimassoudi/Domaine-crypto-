@@ -15,46 +15,56 @@ const APIs = {
   fakestore: 'https://fakestoreapi.com/products',
 };
 
-// خوارزمية توسيع المنتجات لإنشاء آلاف الخيارات
+// Advanced expansion engine to generate thousands of unique items
 const expandProducts = (baseProducts: any[]): Product[] => {
     const expanded: Product[] = [];
     const years = ["2022", "2023", "2024", "2025"];
-    const conditions = ["New", "Refurbished (A+)", "Open Box"];
+    const conditions = ["New", "Certified Refurbished", "Open Box - Like New"];
+    const storageOptions = ["128GB", "256GB", "512GB", "1TB"];
+    const colors = ["Space Gray", "Silver", "Ocean Blue", "Phantom Black", "Pearl White"];
 
     baseProducts.forEach((p) => {
-        // إنشاء 10 متغيرات لكل منتج أساسي للوصول لآلاف المنتجات
-        for (let i = 0; i < 12; i++) {
+        const baseCategory = mapCategory(p.category);
+        
+        // Generate up to 30 variations per base product to reach thousands
+        for (let i = 0; i < 30; i++) {
             const year = years[i % years.length];
             const condition = conditions[i % conditions.length];
+            const color = colors[i % colors.length];
             const isLatest = year === "2025";
             
-            // حساب سعر تنافسي (أقل من الجملة)
-            let wholesalePrice = p.price || 100;
-            if (i > 0) wholesalePrice = wholesalePrice * (0.8 + (i * 0.05)); // تنويع الأسعار
-            const finalPrice = parseFloat((wholesalePrice * 0.9).toFixed(2)); // خصم 10% إضافي للسعر التنافسي
+            // Wholesale competitive pricing logic
+            let wholesaleBase = p.price || 150;
+            // Add variance based on variation index
+            wholesaleBase = wholesaleBase * (0.85 + (i * 0.02)); 
+            const finalPrice = parseFloat((wholesaleBase * 0.88).toFixed(2)); // Always 12% below retail
+
+            const titleAddon = baseCategory === 'Smartphones' || baseCategory === 'Computers' 
+                ? `${storageOptions[i % 4]} ${color}` 
+                : `${color} Edition`;
 
             expanded.push({
                 id: `${p.source || 'gen'}_${p.id}_v${i}`,
-                title: `${p.title} ${isLatest ? 'Pro Max' : ''} (${year} Edition)`,
+                title: `${p.title} ${isLatest ? 'Ultra Pro' : ''} ${titleAddon} (${year})`,
                 price: finalPrice,
-                originalPrice: parseFloat((finalPrice * 1.25).toFixed(2)),
+                originalPrice: parseFloat((finalPrice * 1.3).toFixed(2)),
                 currency: 'USDT',
-                rating: Math.min(5, (p.rating?.rate || p.rating || 4) + (Math.random() * 0.5)),
-                reviews: Math.floor(Math.random() * 2000) + 50,
+                rating: Math.min(5, (p.rating?.rate || p.rating || 4.2) + (Math.random() * 0.4)),
+                reviews: Math.floor(Math.random() * 5000) + 200,
                 image: p.image || p.thumbnail,
                 images: p.images || [p.image || p.thumbnail],
-                category: mapCategory(p.category),
-                description: `${p.description}. This ${year} model features upgraded components and is offered at a special crypto-exclusive wholesale price.`,
-                stock: Math.floor(Math.random() * 500) + 20,
-                sold: Math.floor(Math.random() * 5000) + 100,
-                shipping: "Free Express Shipping",
-                brand: p.brand || "Global Elite",
+                category: baseCategory,
+                description: `Exclusive ${year} ${condition} model. ${p.description}. Sourced directly from wholesale partners for the CryptoMart ecosystem. High-performance guaranteed.`,
+                stock: Math.floor(Math.random() * 1000) + 50,
+                sold: Math.floor(Math.random() * 8000) + 500,
+                shipping: "Priority Crypto Shipping (Insured)",
+                brand: p.brand || "Global Tech Elite",
                 specs: {
-                    "Model Year": year,
+                    "Release Date": `${year}-01`,
                     "Condition": condition,
-                    "Warranty": "2 Years Global",
-                    "Authenticity": "100% Guaranteed",
-                    "Wholesale ID": `WHS-${Math.floor(Math.random() * 99999)}`
+                    "Warranty": "Global Crypto-Warranty (24 Months)",
+                    "Color": color,
+                    "Wholesale ID": `W-BATCH-${Math.floor(Math.random() * 1000000)}`
                 }
             });
         }
@@ -64,22 +74,23 @@ const expandProducts = (baseProducts: any[]): Product[] => {
 
 const mapCategory = (cat: string): string => {
     const c = cat.toLowerCase();
-    if (c.includes('phone') || c.includes('smartphones')) return 'Smartphones';
-    if (c.includes('laptop') || c.includes('pc')) return 'Computers';
-    if (c.includes('tv') || c.includes('lighting')) return 'Home & TV';
-    if (c.includes('jewelery')) return 'Jewelry';
-    if (c.includes('clothing') || c.includes('fashion')) return 'Fashion';
-    if (c.includes('game') || c.includes('console')) return 'Gaming';
-    if (c.includes('fragrance') || c.includes('beauty')) return 'Beauty';
-    return cat.charAt(0).toUpperCase() + cat.slice(1);
+    if (c.includes('phone') || c.includes('mobile') || c.includes('smartphones')) return 'Smartphones';
+    if (c.includes('laptop') || c.includes('pc') || c.includes('computer') || c.includes('tablet')) return 'Computers';
+    if (c.includes('tv') || c.includes('television') || c.includes('home-appliances') || c.includes('lighting')) return 'Home & TV';
+    if (c.includes('jewelery') || c.includes('watch') || c.includes('accessories')) return 'Jewelry & Watches';
+    if (c.includes('clothing') || c.includes('fashion') || c.includes('shirt') || c.includes('shoe')) return 'Fashion';
+    if (c.includes('game') || c.includes('console') || c.includes('toy')) return 'Gaming & Play';
+    if (c.includes('fragrance') || c.includes('beauty') || c.includes('skin')) return 'Beauty & Health';
+    if (c.includes('crypto') || c.includes('hardware') || c.includes('ledger')) return 'Crypto Hardware';
+    return 'Electronics'; // Default fallback
 };
 
 export const mockBackend = {
-  getProducts: async (limit: number = 50, skip: number = 0, source: string = 'all'): Promise<Product[]> => {
+  getProducts: async (limit: number = 100, skip: number = 0, source: string = 'all'): Promise<Product[]> => {
     try {
         if (source === 'printful') return await printfulService.getProducts();
         
-        // جلب البيانات من المصادر المتعددة
+        // Parallel fetch for speed
         const [djRes, fsRes] = await Promise.all([
             fetch(`${APIs.dummyjson}?limit=100`),
             fetch(APIs.fakestore)
@@ -88,7 +99,6 @@ export const mockBackend = {
         const djData = await djRes.json();
         const fsData = await fsRes.json();
         
-        // دمج وتوسيع البيانات لتصل للآلاف
         const allBase = [
             ...djData.products.map((p: any) => ({ ...p, source: 'dj' })),
             ...fsData.map((p: any) => ({ ...p, source: 'fs' }))
@@ -96,26 +106,26 @@ export const mockBackend = {
         
         const allExpanded = expandProducts(allBase);
         
-        // الخلط العشوائي لضمان التنوع
-        return allExpanded.sort(() => Math.random() - 0.5).slice(skip, skip + limit);
+        // Return sorted by date/popularity simulation
+        return allExpanded.sort((a, b) => b.sold - a.sold).slice(skip, skip + limit);
     } catch (e) {
-        console.error("API Fetch Error", e);
+        console.error("Critical API Error", e);
         return [];
     }
   },
 
   getCategories: async (): Promise<string[]> => {
-      return ['Smartphones', 'Computers', 'Home & TV', 'Fashion', 'Jewelry', 'Gaming', 'Beauty', 'Custom Merch'];
+      return ['Smartphones', 'Computers', 'Home & TV', 'Fashion', 'Jewelry & Watches', 'Gaming & Play', 'Beauty & Health', 'Crypto Hardware'];
   },
 
   getProductById: async (id: string | number): Promise<Product | undefined> => {
-    // بما أننا نولد المنتجات ديناميكياً، سنقوم بجلبها والبحث عن الـ ID
-    const all = await mockBackend.getProducts(2000); 
+    // Search in a large batch to find generated items
+    const all = await mockBackend.getProducts(3000); 
     return all.find(p => p.id.toString() === id.toString());
   },
 
-  searchProducts: async (query: string, category?: string, source: string = 'all'): Promise<Product[]> => {
-    const all = await mockBackend.getProducts(1000);
+  searchProducts: async (query: string, category?: string): Promise<Product[]> => {
+    const all = await mockBackend.getProducts(3000); // Massive search pool
     let filtered = all;
     
     if (category && category !== 'All') {
@@ -134,8 +144,11 @@ export const mockBackend = {
   },
 
   getFlashDeals: async (): Promise<Product[]> => {
-      const all = await mockBackend.getProducts(50);
-      return all.slice(0, 8).map(p => ({ ...p, price: parseFloat((p.price * 0.8).toFixed(2)) }));
+      const all = await mockBackend.getProducts(100);
+      return all.filter(p => p.originalPrice).slice(0, 12).map(p => ({
+          ...p,
+          price: parseFloat((p.price * 0.75).toFixed(2)) // Extra 25% off for flash deals
+      }));
   },
 
   getCart: () => JSON.parse(localStorage.getItem(STORAGE_KEYS.CART) || '{"items":[], "total":0}'),
