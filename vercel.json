@@ -1,7 +1,9 @@
+
 {
   "rewrites": [
     { "source": "/api/dynadot", "destination": "/api/dynadot.js" },
     { "source": "/api/printful", "destination": "/api/printful.js" },
+    { "source": "/api/amazon", "destination": "/api/amazon.js" },
     { "source": "/api/confirm", "destination": "/api/confirm.js" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
