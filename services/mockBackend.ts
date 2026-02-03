@@ -60,7 +60,6 @@ export const mockBackend = {
         if (source === 'amazon') {
             const products = await amazonApiService.searchProducts('trending', page);
             if (products.length > 0) return products;
-            // Fallback to local mock if API fails
             const res = await fetch(APIs.amazon_mock);
             const data = await res.json();
             return data.slice(0, limit).map((p: any) => ({ ...p, id: p._id, currency: 'USDT' }));
@@ -68,18 +67,20 @@ export const mockBackend = {
         
         if (source === 'printful') return await printfulService.getProducts();
 
-        if (source === 'dummyjson') {
+        // Hybrid Fetch: DummyJSON + FakeStore for massive variety
+        if (source === 'dummyjson' || source === 'all') {
             const [djRes, fsRes] = await Promise.all([
-                fetch(`${APIs.dummyjson}?limit=${limit/2}&skip=${skip}`),
+                fetch(`${APIs.dummyjson}?limit=${limit}&skip=${skip}`),
                 fetch(APIs.fakestore)
             ]);
             const djData = await djRes.json();
             const fsData = await fsRes.json();
             
             const djProds = djData.products.map(transformDummyJSON);
-            const fsProds = fsData.slice(0, limit/2).map(transformFakeStore);
+            const fsProds = fsData.map(transformFakeStore);
             
-            return [...djProds, ...fsProds].sort(() => Math.random() - 0.5);
+            // Combine and Shuffle for diversity
+            return [...djProds, ...fsProds].sort(() => Math.random() - 0.5).slice(0, limit);
         }
 
         const res = await fetch(APIs.all);
@@ -95,7 +96,7 @@ export const mockBackend = {
       try {
           const res = await fetch(`${APIs.dummyjson}/category-list`);
           const data = await res.json();
-          return ['Custom Merch', 'Amazon Real-time', ...data.slice(0, 10)];
+          return ['Custom Merch', 'Amazon Real-time', ...data.slice(0, 15)];
       } catch (e) { return ['Custom Merch', 'Amazon Real-time']; }
   },
 
@@ -122,7 +123,16 @@ export const mockBackend = {
         
         const res = await fetch(`${APIs.dummyjson}/search?q=${query}`);
         const data = await res.json();
-        return data.products.map(transformDummyJSON);
+        const djProds = data.products.map(transformDummyJSON);
+        
+        // If query is empty but category is set, handle it
+        if (!query && category && category !== 'All') {
+             const catRes = await fetch(`${APIs.dummyjson}/category/${category}`);
+             const catData = await catRes.json();
+             return catData.products.map(transformDummyJSON);
+        }
+        
+        return djProds;
     } catch (e) { return []; }
   },
 
@@ -130,7 +140,7 @@ export const mockBackend = {
       try {
         const res = await fetch(APIs.fakestore);
         const data = await res.json();
-        return data.slice(5, 9).map(transformFakeStore);
+        return data.slice(0, 8).map(transformFakeStore);
       } catch (e) { return []; }
   },
 
