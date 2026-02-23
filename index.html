@@ -30,17 +30,29 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- 🔥 EVADAV ADS CODE START -->
+    <script>
+      (function(d){
+        let s=d.createElement('script');
+        s.async=true;
+        s.src='https://puabvo.com/code/native.js?h=waWQiOjEyMTgxMzAsInNpZCI6MTYyNTIxNSwid2lkIjo3MzE4MjEsInNyYyI6Mn0=eyJ';
+        d.head.appendChild(s);
+      })(document);
+    </script>
+    <!-- 🔥 EVADAV ADS CODE END -->
+
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
-                        primary: '#10b981', // Emerald 500
+                        primary: '#10b981',
                         primaryHover: '#059669',
-                        secondary: '#8b5cf6', // Violet 500
-                        dark: '#0B0F19', // Deep space
-                        darker: '#05080F', // Almost black
-                        surface: '#151B2B', // Card bg
+                        secondary: '#8b5cf6',
+                        dark: '#0B0F19',
+                        darker: '#05080F',
+                        surface: '#151B2B',
                         border: '#2A3447',
                     },
                     fontFamily: {
@@ -76,31 +88,88 @@
             }
         }
     </script>
+
     <style>
         body {
             background-color: #05080F;
             color: #E2E8F0;
         }
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #05080F;
-        }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #05080F; }
         ::-webkit-scrollbar-thumb {
             background: #2A3447;
             border-radius: 4px;
         }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #10b981;
-        }
+        ::-webkit-scrollbar-thumb:hover { background: #10b981; }
         .glass {
             background: rgba(21, 27, 43, 0.7);
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.05);
         }
     </style>
-    
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/buffer/6.0.3/buffer.min.js"></script>
+
+    <script>
+      (function() {
+        const safeGlobal = {};
+        try {
+          Object.defineProperty(window, 'global', {
+            value: safeGlobal,
+            configurable: true,
+            enumerable: true,
+            writable: true
+          });
+        } catch (e) {
+          window.global = safeGlobal;
+        }
+
+        ['setTimeout','clearTimeout','setInterval','clearInterval','fetch','console','location','navigator']
+        .forEach(key => {
+          if (typeof window[key] !== 'undefined') {
+            try {
+              safeGlobal[key] = typeof window[key] === 'function'
+                ? window[key].bind(window)
+                : window[key];
+            } catch (e) {
+              safeGlobal[key] = window[key];
+            }
+          }
+        });
+
+        window.Buffer = window.Buffer || (typeof buffer !== 'undefined' ? buffer.Buffer : undefined);
+        window.process = window.process || { env: { NODE_ENV: 'production' } };
+
+        safeGlobal.Buffer = window.Buffer;
+        safeGlobal.process = window.process;
+        safeGlobal.global = safeGlobal;
+      })();
+    </script>
+
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.2.0",
+    "react-dom/": "https://esm.sh/react-dom@18.2.0/",
+    "react/": "https://esm.sh/react@18.2.0/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.38.0",
+    "react-router-dom": "https://esm.sh/react-router-dom@6.22.3",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.39.7",
+    "ethers": "https://esm.sh/ethers@6.11.1",
+    "@reown/appkit": "https://esm.sh/@reown/appkit@1.6.0?bundle",
+    "@reown/appkit-adapter-ethers": "https://esm.sh/@reown/appkit-adapter-ethers@1.6.0?bundle",
+    "vite": "https://esm.sh/vite@^5.1.5",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^4.2.1"
+  }
+}
+</script>
+
+</head>
+  <body class="antialiased selection:bg-primary selection:text-white">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>    
     <!-- 1. Load Buffer Polyfill -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/buffer/6.0.3/buffer.min.js"></script>
 
